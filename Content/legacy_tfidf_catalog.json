@@ -1,0 +1,1124 @@
+{
+  "catalogue_version": 1,
+  "method": "TF-IDF discriminative n-gram extraction with deterministic matching",
+  "classifier": null,
+  "training_rows": 60,
+  "label_counts": {
+    "SAFE": 30,
+    "RESTRICTED": 30
+  },
+  "dataset_name": "labeled_emails.csv",
+  "dataset_notice": "The included starter dataset is synthetic demonstration data. It is not an independently collected historical email corpus and must not be used to claim production accuracy.",
+  "patterns": [
+    {
+      "pattern": "review",
+      "class": "SAFE",
+      "weight": 1.0,
+      "supporting_documents": 9
+    },
+    {
+      "pattern": "available",
+      "class": "SAFE",
+      "weight": 0.71312,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "update",
+      "class": "SAFE",
+      "weight": 0.66861,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "approved",
+      "class": "SAFE",
+      "weight": 0.64346,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "service",
+      "class": "SAFE",
+      "weight": 0.63609,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "schedule",
+      "class": "SAFE",
+      "weight": 0.48317,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "completed",
+      "class": "SAFE",
+      "weight": 0.47284,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "order",
+      "class": "SAFE",
+      "weight": 0.45037,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "confirmation",
+      "class": "SAFE",
+      "weight": 0.43029,
+      "supporting_documents": 6
+    },
+    {
+      "pattern": "portal",
+      "class": "SAFE",
+      "weight": 0.42472,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "team",
+      "class": "SAFE",
+      "weight": 0.42105,
+      "supporting_documents": 11
+    },
+    {
+      "pattern": "delivery",
+      "class": "SAFE",
+      "weight": 0.41571,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "official",
+      "class": "SAFE",
+      "weight": 0.38889,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "pm",
+      "class": "SAFE",
+      "weight": 0.38309,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "scheduled",
+      "class": "SAFE",
+      "weight": 0.37959,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "project",
+      "class": "SAFE",
+      "weight": 0.37619,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "policy",
+      "class": "SAFE",
+      "weight": 0.37146,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "session",
+      "class": "SAFE",
+      "weight": 0.36233,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "subscription",
+      "class": "SAFE",
+      "weight": 0.36229,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "confirmed",
+      "class": "SAFE",
+      "weight": 0.35704,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "comments",
+      "class": "SAFE",
+      "weight": 0.34215,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "performance",
+      "class": "SAFE",
+      "weight": 0.34078,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "contact",
+      "class": "SAFE",
+      "weight": 0.32716,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "request",
+      "class": "SAFE",
+      "weight": 0.3264,
+      "supporting_documents": 7
+    },
+    {
+      "pattern": "end",
+      "class": "SAFE",
+      "weight": 0.31369,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "office",
+      "class": "SAFE",
+      "weight": 0.30373,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "planned",
+      "class": "SAFE",
+      "weight": 0.30373,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "processed",
+      "class": "SAFE",
+      "weight": 0.29603,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "updated",
+      "class": "SAFE",
+      "weight": 0.29272,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "saved",
+      "class": "SAFE",
+      "weight": 0.28922,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "friday",
+      "class": "SAFE",
+      "weight": 0.28406,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "status",
+      "class": "SAFE",
+      "weight": 0.28085,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "document",
+      "class": "SAFE",
+      "weight": 0.28002,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "month",
+      "class": "SAFE",
+      "weight": 0.27585,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "reminder",
+      "class": "SAFE",
+      "weight": 0.27031,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "business",
+      "class": "SAFE",
+      "weight": 0.27027,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "operations",
+      "class": "SAFE",
+      "weight": 0.27027,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "sign",
+      "class": "SAFE",
+      "weight": 0.26439,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "week",
+      "class": "SAFE",
+      "weight": 0.26413,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "customer",
+      "class": "SAFE",
+      "weight": 0.26041,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "notice",
+      "class": "SAFE",
+      "weight": 0.25328,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "begins",
+      "class": "SAFE",
+      "weight": 0.25194,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "approval",
+      "class": "SAFE",
+      "weight": 0.25127,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "page",
+      "class": "SAFE",
+      "weight": 0.24173,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "weekly",
+      "class": "SAFE",
+      "weight": 0.23843,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "completed successfully",
+      "class": "SAFE",
+      "weight": 0.23387,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "successfully",
+      "class": "SAFE",
+      "weight": 0.23387,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "report",
+      "class": "SAFE",
+      "weight": 0.2336,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "company",
+      "class": "SAFE",
+      "weight": 0.22479,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "desk",
+      "class": "SAFE",
+      "weight": 0.22414,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "meeting",
+      "class": "SAFE",
+      "weight": 0.22256,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "using",
+      "class": "SAFE",
+      "weight": 0.22074,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "manager",
+      "class": "SAFE",
+      "weight": 0.22062,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "employee",
+      "class": "SAFE",
+      "weight": 0.21939,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "employee portal",
+      "class": "SAFE",
+      "weight": 0.21939,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "shared",
+      "class": "SAFE",
+      "weight": 0.20914,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "shared workspace",
+      "class": "SAFE",
+      "weight": 0.20914,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "workspace",
+      "class": "SAFE",
+      "weight": 0.20914,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "received",
+      "class": "SAFE",
+      "weight": 0.1719,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "need",
+      "class": "SAFE",
+      "weight": 0.15873,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "technical",
+      "class": "SAFE",
+      "weight": 0.15229,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "invoice",
+      "class": "SAFE",
+      "weight": 0.13798,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "access",
+      "class": "SAFE",
+      "weight": 0.12823,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "message",
+      "class": "SAFE",
+      "weight": 0.074,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "finance",
+      "class": "SAFE",
+      "weight": 0.05655,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "fee",
+      "class": "RESTRICTED",
+      "weight": 1.0,
+      "supporting_documents": 10
+    },
+    {
+      "pattern": "account",
+      "class": "RESTRICTED",
+      "weight": 0.87303,
+      "supporting_documents": 19
+    },
+    {
+      "pattern": "immediately",
+      "class": "RESTRICTED",
+      "weight": 0.87137,
+      "supporting_documents": 9
+    },
+    {
+      "pattern": "password",
+      "class": "RESTRICTED",
+      "weight": 0.84386,
+      "supporting_documents": 13
+    },
+    {
+      "pattern": "card",
+      "class": "RESTRICTED",
+      "weight": 0.81971,
+      "supporting_documents": 7
+    },
+    {
+      "pattern": "fake",
+      "class": "RESTRICTED",
+      "weight": 0.79654,
+      "supporting_documents": 8
+    },
+    {
+      "pattern": "transfer",
+      "class": "RESTRICTED",
+      "weight": 0.76375,
+      "supporting_documents": 7
+    },
+    {
+      "pattern": "bank",
+      "class": "RESTRICTED",
+      "weight": 0.7123,
+      "supporting_documents": 8
+    },
+    {
+      "pattern": "claim",
+      "class": "RESTRICTED",
+      "weight": 0.68832,
+      "supporting_documents": 7
+    },
+    {
+      "pattern": "send",
+      "class": "RESTRICTED",
+      "weight": 0.68625,
+      "supporting_documents": 7
+    },
+    {
+      "pattern": "code",
+      "class": "RESTRICTED",
+      "weight": 0.68388,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "guaranteed",
+      "class": "RESTRICTED",
+      "weight": 0.65287,
+      "supporting_documents": 6
+    },
+    {
+      "pattern": "pay",
+      "class": "RESTRICTED",
+      "weight": 0.64077,
+      "supporting_documents": 8
+    },
+    {
+      "pattern": "prize",
+      "class": "RESTRICTED",
+      "weight": 0.63217,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "pin",
+      "class": "RESTRICTED",
+      "weight": 0.52935,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "reward",
+      "class": "RESTRICTED",
+      "weight": 0.5111,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "funds",
+      "class": "RESTRICTED",
+      "weight": 0.50533,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "verification code",
+      "class": "RESTRICTED",
+      "weight": 0.47854,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "selected",
+      "class": "RESTRICTED",
+      "weight": 0.47286,
+      "supporting_documents": 5
+    },
+    {
+      "pattern": "verification",
+      "class": "RESTRICTED",
+      "weight": 0.44749,
+      "supporting_documents": 6
+    },
+    {
+      "pattern": "payment",
+      "class": "RESTRICTED",
+      "weight": 0.44588,
+      "supporting_documents": 8
+    },
+    {
+      "pattern": "processing",
+      "class": "RESTRICTED",
+      "weight": 0.44584,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "processing fee",
+      "class": "RESTRICTED",
+      "weight": 0.44584,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "bank details",
+      "class": "RESTRICTED",
+      "weight": 0.44548,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "urgent",
+      "class": "RESTRICTED",
+      "weight": 0.43349,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "time",
+      "class": "RESTRICTED",
+      "weight": 0.42221,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "verify",
+      "class": "RESTRICTED",
+      "weight": 0.41794,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "details",
+      "class": "RESTRICTED",
+      "weight": 0.39538,
+      "supporting_documents": 10
+    },
+    {
+      "pattern": "today",
+      "class": "RESTRICTED",
+      "weight": 0.39182,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "suspended",
+      "class": "RESTRICTED",
+      "weight": 0.37232,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "banking",
+      "class": "RESTRICTED",
+      "weight": 0.36929,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "banking password",
+      "class": "RESTRICTED",
+      "weight": 0.36929,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "inheritance",
+      "class": "RESTRICTED",
+      "weight": 0.36899,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "tax",
+      "class": "RESTRICTED",
+      "weight": 0.367,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "lottery",
+      "class": "RESTRICTED",
+      "weight": 0.36282,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "suspension",
+      "class": "RESTRICTED",
+      "weight": 0.35801,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "mailbox",
+      "class": "RESTRICTED",
+      "weight": 0.3431,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "bank account",
+      "class": "RESTRICTED",
+      "weight": 0.32289,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "winnings",
+      "class": "RESTRICTED",
+      "weight": 0.29803,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "login credentials",
+      "class": "RESTRICTED",
+      "weight": 0.29756,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "registration fee",
+      "class": "RESTRICTED",
+      "weight": 0.29399,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "avoid",
+      "class": "RESTRICTED",
+      "weight": 0.29383,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "fee today",
+      "class": "RESTRICTED",
+      "weight": 0.29096,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "cash",
+      "class": "RESTRICTED",
+      "weight": 0.28821,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "card details",
+      "class": "RESTRICTED",
+      "weight": 0.28799,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "reply",
+      "class": "RESTRICTED",
+      "weight": 0.28319,
+      "supporting_documents": 6
+    },
+    {
+      "pattern": "send bank",
+      "class": "RESTRICTED",
+      "weight": 0.28099,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "send bank details",
+      "class": "RESTRICTED",
+      "weight": 0.28099,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "permanent",
+      "class": "RESTRICTED",
+      "weight": 0.28089,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "paying",
+      "class": "RESTRICTED",
+      "weight": 0.27922,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "release fee",
+      "class": "RESTRICTED",
+      "weight": 0.27414,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "pay processing",
+      "class": "RESTRICTED",
+      "weight": 0.27027,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "pay processing fee",
+      "class": "RESTRICTED",
+      "weight": 0.27027,
+      "supporting_documents": 3
+    },
+    {
+      "pattern": "changed",
+      "class": "RESTRICTED",
+      "weight": 0.26754,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "closure",
+      "class": "RESTRICTED",
+      "weight": 0.26608,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "fee immediately",
+      "class": "RESTRICTED",
+      "weight": 0.25615,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "activate",
+      "class": "RESTRICTED",
+      "weight": 0.25578,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "earn",
+      "class": "RESTRICTED",
+      "weight": 0.25578,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "account blocked",
+      "class": "RESTRICTED",
+      "weight": 0.24963,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "blocked",
+      "class": "RESTRICTED",
+      "weight": 0.24963,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "credentials",
+      "class": "RESTRICTED",
+      "weight": 0.24676,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "prevent",
+      "class": "RESTRICTED",
+      "weight": 0.2459,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "authentication",
+      "class": "RESTRICTED",
+      "weight": 0.2399,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "support team",
+      "class": "RESTRICTED",
+      "weight": 0.2399,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "card number",
+      "class": "RESTRICTED",
+      "weight": 0.23745,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "card number pin",
+      "class": "RESTRICTED",
+      "weight": 0.23745,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "number pin",
+      "class": "RESTRICTED",
+      "weight": 0.23745,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "card pin",
+      "class": "RESTRICTED",
+      "weight": 0.23551,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "claim guaranteed",
+      "class": "RESTRICTED",
+      "weight": 0.23096,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "bank details transfer",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "details transfer",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "details transfer payment",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "payment immediately",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "transfer payment",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "transfer payment immediately",
+      "class": "RESTRICTED",
+      "weight": 0.22948,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "password verification",
+      "class": "RESTRICTED",
+      "weight": 0.22922,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "deadline",
+      "class": "RESTRICTED",
+      "weight": 0.22687,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "current password",
+      "class": "RESTRICTED",
+      "weight": 0.22384,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "send current",
+      "class": "RESTRICTED",
+      "weight": 0.22384,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "send current password",
+      "class": "RESTRICTED",
+      "weight": 0.22384,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "high",
+      "class": "RESTRICTED",
+      "weight": 0.21997,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "offer",
+      "class": "RESTRICTED",
+      "weight": 0.21997,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "pay registration",
+      "class": "RESTRICTED",
+      "weight": 0.21997,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "pay registration fee",
+      "class": "RESTRICTED",
+      "weight": 0.21997,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "registration fee today",
+      "class": "RESTRICTED",
+      "weight": 0.21997,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "pay transfer",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "pay transfer fee",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "receive inheritance",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "selected receive",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "selected receive inheritance",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "transfer fee",
+      "class": "RESTRICTED",
+      "weight": 0.21793,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "time verification",
+      "class": "RESTRICTED",
+      "weight": 0.21784,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "time verification code",
+      "class": "RESTRICTED",
+      "weight": 0.21784,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "money",
+      "class": "RESTRICTED",
+      "weight": 0.216,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "claim winnings",
+      "class": "RESTRICTED",
+      "weight": 0.21429,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "advance",
+      "class": "RESTRICTED",
+      "weight": 0.21202,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "release",
+      "class": "RESTRICTED",
+      "weight": 0.20645,
+      "supporting_documents": 6
+    },
+    {
+      "pattern": "claim reward",
+      "class": "RESTRICTED",
+      "weight": 0.19768,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "fee claim",
+      "class": "RESTRICTED",
+      "weight": 0.19768,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "fee claim reward",
+      "class": "RESTRICTED",
+      "weight": 0.19768,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "processing fee claim",
+      "class": "RESTRICTED",
+      "weight": 0.19768,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "card details pin",
+      "class": "RESTRICTED",
+      "weight": 0.19762,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "details pin",
+      "class": "RESTRICTED",
+      "weight": 0.19762,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "restore",
+      "class": "RESTRICTED",
+      "weight": 0.19762,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "restore access",
+      "class": "RESTRICTED",
+      "weight": 0.19762,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "support",
+      "class": "RESTRICTED",
+      "weight": 0.1966,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "fee selected",
+      "class": "RESTRICTED",
+      "weight": 0.19528,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "receive",
+      "class": "RESTRICTED",
+      "weight": 0.19131,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "account number",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "account number card",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "number card",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "number card details",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "reply account",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "reply account number",
+      "class": "RESTRICTED",
+      "weight": 0.18766,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "prize pay",
+      "class": "RESTRICTED",
+      "weight": 0.18195,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "prize pay processing",
+      "class": "RESTRICTED",
+      "weight": 0.18195,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "current",
+      "class": "RESTRICTED",
+      "weight": 0.17565,
+      "supporting_documents": 4
+    },
+    {
+      "pattern": "internet",
+      "class": "RESTRICTED",
+      "weight": 0.175,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "internet banking",
+      "class": "RESTRICTED",
+      "weight": 0.175,
+      "supporting_documents": 2
+    },
+    {
+      "pattern": "internet banking password",
+      "class": "RESTRICTED",
+      "weight": 0.175,
+      "supporting_documents": 2
+    }
+  ]
+}

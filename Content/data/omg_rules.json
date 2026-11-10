@@ -1,0 +1,115 @@
+{
+  "version": "1.2.0",
+  "description": "Runtime-editable heuristic rules for outgoing email inspection. These rules are indicators, not a complete malware or reputation scanner.",
+  "rules": [
+    {
+      "code": "LOTTERY_SCAM",
+      "category": "FRAUD",
+      "patterns": [
+        "\\bclaim your lottery prize\\b",
+        "\\byou have won\\b.{0,80}\\bprize\\b",
+        "\\bclaim your winnings\\b",
+        "\\blottery winner\\b"
+      ]
+    },
+    {
+      "code": "CREDENTIAL_PHISHING",
+      "category": "PHISHING",
+      "patterns": [
+        "\\bverify your password\\b",
+        "\\bconfirm your login credentials\\b",
+        "\\baccount will be suspended\\b",
+        "\\breset your password immediately\\b",
+        "\\bvalidate your credentials\\b"
+      ]
+    },
+    {
+      "code": "UNSOLICITED_SPAM",
+      "category": "SPAM",
+      "patterns": [
+        "\\bearn money fast\\b",
+        "\\bguaranteed income\\b",
+        "\\bact now\\b.{0,60}\\blimited offer\\b",
+        "\\bmake money from home\\b.{0,80}\\bguaranteed\\b"
+      ]
+    },
+    {
+      "code": "ADVANCE_FEE_SCAM",
+      "category": "FRAUD",
+      "patterns": [
+        "\\bpay (?:a )?small (?:processing )?fee\\b.{0,100}\\b(prize|inheritance|funds|reward)\\b",
+        "\\btransfer fee\\b.{0,80}\\brelease (?:your )?(?:funds|inheritance)\\b"
+      ]
+    },
+    {
+      "code": "URGENT_PAYMENT_DEMAND",
+      "category": "SOCIAL_ENGINEERING",
+      "patterns": [
+        "\\burgent wire transfer\\b",
+        "\\bchange of bank details\\b.{0,100}\\bpay immediately\\b",
+        "\\bdo not call me\\b.{0,80}\\bpayment\\b",
+        "\\btransfer (?:the )?payment immediately\\b",
+        "\\btransfer funds immediately\\b",
+        "\\b(?:urgent|immediate) payment required\\b",
+        "\\bpay immediately\\b.{0,100}\\b(?:account suspension|account closure)\\b",
+        "\\btransfer (?:the )?payment\\b.{0,100}\\bto avoid account suspension\\b"
+      ]
+    },
+    {
+      "code": "MFA_CODE_REQUEST",
+      "category": "CREDENTIAL_THEFT",
+      "patterns": [
+        "\\bsend (?:me )?(?:the )?(?:mfa|2fa|verification|one.time) code\\b",
+        "\\bshare your authentication code\\b"
+      ]
+    },
+    {
+      "code": "FAKE_GIVEAWAY",
+      "category": "FRAUD",
+      "patterns": [
+        "\\byou have been selected\\b.{0,80}\\b(gift card|giveaway|free iphone)\\b",
+        "\\bclaim your free (?:gift card|iphone|prize)\\b"
+      ]
+    },
+    {
+      "code": "HTML_FORM_CREDENTIAL_CAPTURE",
+      "category": "HTML_INSPECTION",
+      "patterns": [
+        "\\benter your password\\b.{0,60}\\b(?:otp|verification\\s+code|two.factor\\s+code)\\b",
+        "\\bsubmit your credentials\\b.{0,60}\\b(?:unverified\\s+form|external\\s+link|unverified\\s+website)\\b",
+        "\\bconfirm your bank login\\b.{0,60}\\b(?:otp|verification\\s+code)\\b"
+      ]
+    },
+    {
+      "code": "POTENTIAL_PAYMENT_REDIRECTION",
+      "category": "SOCIAL_ENGINEERING",
+      "patterns": [
+        "(?=.*\\b(?:payment|invoice|transfer|remittance)\\b)(?=.*\\b(?:updated|changed|new)\\b.{0,50}\\b(?:bank|account|payment)\\b.{0,40}\\b(?:details|information|instructions)\\b)(?=.*\\b(?:today|immediately|urgently|asap|separately)\\b)",
+        "(?=.*\\b(?:invoice|payment|pay|transfer|remittance)\\b)(?=.*\\b(?:bank|account)\\b.{0,35}\\b(?:has changed|was changed|updated|new|replaced)\\b|\\b(?:new|updated|changed)\\b.{0,35}\\b(?:bank|account)\\b)(?=.*\\b(?:use|process|send|transfer|pay)\\b)"
+      ]
+    },
+    {
+      "code": "OTP_OR_AUTH_CODE_REQUEST",
+      "category": "CREDENTIAL_THEFT",
+      "patterns": [
+        "\\b(?:send|share|provide|forward|reply with)\\b.{0,50}\\b(?:otp|one[ -]?time (?:password|passcode|code)|verification code|2fa code|mfa code)\\b",
+        "\\b(?:otp|verification code|2fa code|mfa code)\\b.{0,45}\\b(?:send|share|provide|forward)\\b"
+      ]
+    },
+    {
+      "code": "PAYMENT_SECRECY_REQUEST",
+      "category": "SOCIAL_ENGINEERING",
+      "patterns": [
+        "(?=.*\\b(?:transfer|send|wire|pay|payment)\\b)(?=.*\\b(?:funds|money|bank|account|₹\\s*\\d|rs\\.?\\s*\\d)\\b)(?=.*\\b(?:do not (?:discuss|tell|share)|don.t (?:discuss|tell)|keep (?:it|this) secret|without informing anyone)\\b)"
+      ]
+    },
+    {
+      "code": "POTENTIAL_ACCOUNT_VERIFICATION_LURE",
+      "category": "SOCIAL_ENGINEERING",
+      "patterns": [
+        "(?=.*\\b(?:verify|confirm|revalidate|validate)\\b.{0,30}\\b(?:account|identity|login)\\b)(?=.*\\b(?:click|link|website|immediately|urgently|today)\\b)",
+        "(?=.*\\b(?:account|login)\\b.{0,30}\\b(?:verification|validation|confirmation)\\b)(?=.*\\b(?:link|click|immediately|today)\\b)"
+      ]
+    }
+  ]
+}

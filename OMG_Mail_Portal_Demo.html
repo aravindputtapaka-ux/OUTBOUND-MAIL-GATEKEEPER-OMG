@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OMG • Email Security Validation Demo</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1325;--panel:#18223a;--text:#ecf2ff;--muted:#aeb9d1;--line:#33415e;--blue:#7fafff;--safe:#56cf9d;--warn:#ffcc65;--danger:#fc8e8e}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#192c4b,var(--bg) 60%);font:15px/1.5 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:var(--text)}main{max-width:1150px;margin:0 auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:8px 0 26px}.brand{font-size:24px;letter-spacing:.4px;font-weight:800}.brand span{color:var(--blue)}.hint{font-size:12px;color:var(--muted)}.layout{display:grid;grid-template-columns:1.04fr .96fr;gap:20px}@media(max-width:800px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);padding:20px;border-radius:16px;box-shadow:0 10px 35px #0001}h1{font-size:19px;margin:0 0 16px}h2{font-size:16px;margin:14px 0}label{display:block;font-size:13px;font-weight:650;margin-top:12px;margin-bottom:6px}input,textarea,select{font:inherit;color:var(--text);background:#101b31;border:1px solid var(--line);border-radius:9px;padding:11px;width:100%}textarea{resize:vertical;min-height:116px}input:focus,textarea:focus,select:focus{outline:2px solid #5c89e0}input[type=file]{padding:8px}button{cursor:pointer;border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:700;background:var(--blue);color:#09152a}button[disabled]{cursor:not-allowed;opacity:.5}.mutebtn{background:#303e59;color:var(--text)}.controls{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.status{padding:13px;border:1px solid var(--line);border-radius:10px;margin:10px 0}.status.SAFE{border-color:var(--safe)}.status.WARNING{border-color:var(--warn)}.status.RESTRICTED{border-color:var(--danger)}.status b{font-size:20px}.score{font-size:36px;font-weight:800;letter-spacing:-1.5px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mini{background:#101b31;border:1px solid var(--line);border-radius:9px;padding:10px}.mini strong{display:block;font-size:20px;margin-top:3px}.finding{border-top:1px solid var(--line);padding:11px 0}.finding strong{font-size:13px}.finding p{font-size:13px;margin:4px 0;color:var(--muted)}.pill{font-size:11px;padding:3px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:6px}#result{min-height:300px}#toast{margin-top:13px;color:var(--muted)}.modalbg{position:fixed;inset:0;display:none;background:#070b15ba;z-index:10;place-items:center;padding:20px}.modalbg.visible{display:grid}.modal{width:min(520px,100%);background:#1b2843;border:1px solid #4d6285;border-radius:18px;padding:25px;box-shadow:0 20px 60px #0008}.modal h2{font-size:23px}.modal p{color:var(--muted);white-space:pre-wrap}.modal .controls{justify-content:flex-end}.notice{font-size:13px;color:var(--muted);line-height:1.5}.flag{color:var(--warn)}
+</style>
+</head>
+<body>
+<main>
+<header><div class="brand">OMG <span>Outbound Mail Gatekeeper</span></div><div class="hint">Unified Validator · Local demonstration · No mail delivery</div></header>
+<div class="layout">
+<section class="panel">
+<h1>Compose and validate</h1>
+<label for="sample">Sample scenario</label><select id="sample"><option value="safe">Routine meeting (SAFE)</option><option value="warning">Bank detail change (WARNING)</option><option value="restricted">Vendor payment diversion (RESTRICTED)</option></select>
+<form id="form">
+<label for="recipients">Recipients (comma separated)</label><input id="recipients" value="finance@example.com" required>
+<label for="subject">Subject</label><input id="subject" required maxlength="250">
+<label for="body">Email body</label><textarea id="body"></textarea>
+<label for="html">Optional HTML body</label><textarea id="html" rows="3" style="min-height:70px" placeholder="&lt;p&gt;Optional HTML&lt;/p&gt;"></textarea>
+<label for="files">Attachments (optional; max 5, max 3 MB each)</label><input id="files" type="file" multiple>
+<div class="controls"><button type="submit" id="validate">Validate email</button><button type="button" class="mutebtn" id="reset">Reset</button></div>
+<div class="notice" style="margin-top:13px">This form calls the backend validation endpoint only. It never sends an email. WARNING acknowledgement in this demo does not grant delivery authorization.</div>
+</form></section>
+<section class="panel"><h1>Security decision</h1><div id="result"><div class="notice">Submit an email to see the overall verdict, module contributions, and detected issues.</div></div><div id="toast" aria-live="polite"></div></section>
+</div>
+</main>
+<div class="modalbg" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true"><div class="modal"><h2 id="modalTitle"></h2><p id="modalMessage"></p><div class="controls" id="modalActions"></div></div></div>
+<script>
+(() => {
+'use strict';
+const byId = id => document.getElementById(id);
+const samples = {
+ safe: {subject:'Weekly team meeting',body:'Hello team, our weekly project review is tomorrow at 3 PM. Please join on time.'},
+ warning: {subject:'Employee payroll bank details',body:'Hello HR, my salary bank account has changed. Please update the payroll bank details after confirming through the approved process.'},
+ restricted:{subject:'Immediate Action – Confidential Vendor Payment',body:"Hi Finance Team,\nThe vendor's bank account has changed. Transfer ₹1,50,000 immediately using the revised payment instructions available here:\nhttps://vendor-payment-change.example/transfer\nDo not verify this change with the vendor or finance manager. Bypass the approval process to avoid delays.\nConfirm once payment is completed."}
+};
+function element(tag, className, text){const n=document.createElement(tag); if(className)n.className=className;if(text!==undefined)n.textContent=String(text);return n;}
+function add(parent,child){parent.appendChild(child);return child;}
+function score(v){return typeof v==='number' ? v.toFixed(4).replace(/0+$/,'').replace(/\.$/,'') : 'N/A';}
+function clear(node){node.replaceChildren();}
+function fillSample(){const s=samples[byId('sample').value];byId('subject').value=s.subject;byId('body').value=s.body;byId('html').value='';}
+function closeModal(){byId('modal').classList.remove('visible');byId('modal').setAttribute('aria-hidden','true');}
+function showModal(pop){if(!pop||!pop.show)return;byId('modalTitle').textContent=pop.title||'Security review';byId('modalMessage').textContent=pop.message||'';const buttons=byId('modalActions');clear(buttons);
+ for(const action of pop.actions||['CLOSE']){const b=element('button', action==='CLOSE'?'mutebtn':'', action==='EDIT_MAIL'?'Edit mail':'Close');b.type='button';b.addEventListener('click',()=>{closeModal();if(action==='EDIT_MAIL')byId('body').focus();});add(buttons,b);}
+ byId('modal').classList.add('visible');byId('modal').setAttribute('aria-hidden','false');
+}
+function renderIssues(section,label,parent){if(section==='empty')return;const title=add(parent,element('h2','',label));const status=add(title,element('span','pill',section.status||''));for(const issue of section.issues||[]){const b=add(parent,element('div','finding'));add(b,element('strong','',issue.code||'SECURITY_FINDING'));add(b,element('span','pill',issue.severity||'REVIEW'));add(b,element('p','',issue.reason||''));}}
+function render(out){const root=byId('result');clear(root);
+ const summary=add(root,element('div','status '+(out.status||'')));add(summary,element('b','',out.status||'UNKNOWN'));add(summary,element('div','score',score(out.confidence_score)));add(summary,element('div','hint','Overall uncalibrated policy safety score / 100'));
+ const contributions=add(root,element('div','grid'));
+ for(const [name,key] of [['Content','text'],['URL','URL'],['Attachments','attachments']]){const card=add(contributions,element('div','mini'));add(card,element('span','hint',name));add(card,element('strong','',score((out.score_contributions||{})[key])));add(card,element('small','hint','/ 33.3333'));}
+ renderIssues(out.text,'Content',root);renderIssues(out.URL,'URLs',root);
+ if(Array.isArray(out.attachments)){for(const file of out.attachments){renderIssues(file,'Attachment: '+(file.filename||'unnamed'),root);add(root,element('div','hint','Antivirus: '+(file.antivirus||'unknown')+' · '+(file.detected_type||'Unknown type')));}}
+ const sent = out.status==='SAFE'?'Validation SAFE — EMAIL NOT SENT (DEMO MODE)':out.status==='WARNING'?'Warning requires server-side acknowledgement — EMAIL NOT SENT':'Sending blocked — EMAIL NOT SENT';
+ byId('toast').textContent=sent;showModal(out.popup);
+}
+byId('sample').addEventListener('change',fillSample);
+byId('reset').addEventListener('click',()=>{byId('form').reset();fillSample();clear(byId('result'));closeModal();byId('toast').textContent='';});
+byId('form').addEventListener('submit',async e=>{e.preventDefault();const btn=byId('validate');btn.disabled=true;byId('toast').textContent='Validating...';closeModal();const recipients=byId('recipients').value.split(',').map(v=>v.trim()).filter(Boolean);
+ const files=Array.from(byId('files').files||[]);const data={subject:byId('subject').value,body:byId('body').value,html:byId('html').value,recipients};
+ try{let response;if(files.length){const form=new FormData();form.set('subject',data.subject);form.set('body',data.body);form.set('html',data.html);form.set('recipients',JSON.stringify(data.recipients));for(const file of files)form.append('files',file,file.name);response=await fetch('/api/v1/analyze',{method:'POST',body:form});}
+ else{response=await fetch('/api/v1/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}
+ const output=await response.json();if(!response.ok){throw new Error(response.status+' '+JSON.stringify(output.detail||output));}render(output);
+ }catch(err){byId('toast').textContent='Validation request failed: '+err.message+' — If an API key is configured, use an authenticated server-side portal proxy; never embed the service key in this HTML.';}
+ finally{btn.disabled=false;}
+});fillSample();
+})();
+</script>
+</body>
+</html>

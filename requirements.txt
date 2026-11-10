@@ -1,0 +1,16 @@
+# Unified runtime dependencies, merged from both source projects.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+python-multipart>=0.0.20,<1
+pydantic>=2.6,<3
+python-dotenv>=1,<2
+beautifulsoup4>=4.12,<5
+idna>=3.6,<4
+pypdf>=5,<8
+PyMuPDF>=1.24,<2
+Pillow>=11,<13
+pytesseract>=0.3.13,<1
+defusedxml>=0.7.1,<1
+joblib>=1.4,<2
+numpy>=1.26,<3
+scikit-learn>=1.7,<2  # optional trusted ML artifact / research tools; disabled by default

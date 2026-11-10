@@ -1,0 +1,1 @@
+# One trusted SHA-256 digest per line; leave empty until adding known blocked samples.
