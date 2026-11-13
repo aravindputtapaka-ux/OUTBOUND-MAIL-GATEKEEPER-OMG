@@ -78,6 +78,7 @@ def inspect_patterns(subject: str, content: str) -> list[dict]:
     if risk_score >= 65.0:
         code = "LEARNED_PATTERN_RESTRICTED"
         category = "SPAM"
+        severity = "MEDIUM"
         message = (
             f"Multiple learned restricted-content patterns matched "
             f"({len(matched_restricted)} indicators; rule risk score {risk_score:.1f})."
@@ -85,6 +86,7 @@ def inspect_patterns(subject: str, content: str) -> list[dict]:
     elif risk_score >= 35.0:
         code = "LEARNED_PATTERN_WARNING"
         category = "SUSPICIOUS_CONTENT"
+        severity = "LOW"
         message = (
             f"Learned suspicious-content patterns matched; manual review is "
             f"recommended (rule risk score {risk_score:.1f})."
@@ -95,6 +97,8 @@ def inspect_patterns(subject: str, content: str) -> list[dict]:
     return [{
         "code": code,
         "category": category,
+        "severity": severity,
+        "confidence": 0.5,
         "message": message,
         "risk_score": round(risk_score, 2),
         "matched_pattern_count": len(matched_restricted),

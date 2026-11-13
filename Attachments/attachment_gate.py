@@ -109,10 +109,15 @@ def scan_bytes(items: list[tuple[str, bytes]]) -> dict[str, Any]:
     # For each supported file: hash, signature, deep parser, AV, and optional ML.
     try:
         report = validate_attachments(items, POLICY)
+        attachments = report.get('attachments')
+        if not isinstance(attachments, list) or len(attachments) != len(items):
+            return restricted('Attachment security engine returned an incomplete report', 'SCANNER_FAILURE')
         # Apply content policy to every *structurally SAFE* file, not only to
         # an all-SAFE batch. This preserves per-file reasons in mixed batches.
         for i, (name, data) in enumerate(items):
-            attachment = report['attachments'][i]
+            attachment = attachments[i]
+            if not isinstance(attachment, dict) or not isinstance(attachment.get('findings'), list):
+                return restricted('Attachment security engine returned a malformed file report', 'SCANNER_FAILURE', name)
             if attachment['status'] == 'RESTRICTED':
                 continue
             content = inspect_content(name, data, CONTENT_POLICY)
