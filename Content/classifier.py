@@ -33,12 +33,16 @@ def classify_email(subject: str, body: str) -> dict:
             finding = {
                 "code": "ML_CLASSIFIER_LOW_CONFIDENCE",
                 "category": "ML_CLASSIFICATION",
+                "severity": "MEDIUM",
+                "confidence": 0.5,
                 "message": reason,
             }
         elif label == "RESTRICTED":
             finding = {
                 "code": "ML_CLASSIFIER_RESTRICTED",
                 "category": "ML_CLASSIFICATION",
+                "severity": "HIGH",
+                "confidence": round(confidence, 4) if confidence is not None else 0.6,
                 "message": "The trained local text classifier classified this email as restricted.",
             }
 

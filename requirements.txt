@@ -14,3 +14,6 @@ defusedxml>=0.7.1,<1
 joblib>=1.4,<2
 numpy>=1.26,<3
 scikit-learn>=1.7,<2  # optional trusted ML artifact / research tools; disabled by default
+openpyxl>=3.1,<4  # bulktesting/run_batch.py report export
+pymongo>=4.9
+python-dotenv>=1.0

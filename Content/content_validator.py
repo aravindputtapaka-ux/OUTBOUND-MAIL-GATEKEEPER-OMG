@@ -1,6 +1,7 @@
 """Independent email text + HTML + optional source ML validation."""
 from __future__ import annotations
 import logging
+import re
 from bs4 import BeautifulSoup
 from .rule_checks import inspect_patterns
 from .contextual_risk import inspect_contextual_risks
@@ -9,6 +10,33 @@ from .classifier import classify_email
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+# Weak context signals that never change a verdict on their own. They keep the
+# reported score informative for clean mail instead of returning a constant 100
+# for every message. The total is capped at MAX_CONTEXT_PENALTY by the caller.
+_CONTEXT_SIGNALS = (
+    (re.compile(r"\b(?:urgent(?:ly)?|immediately|asap|right\s+away)\b", re.I), 2.0),
+    (re.compile(r"\b(?:deadline|overdue|expir(?:e|es|ed|ing|y)|final\s+warning)\b", re.I), 2.0),
+    (re.compile(r"\b(?:payment|invoice|bank(?:ing)?|wire|transfer|salary|payroll|refund)\b", re.I), 2.0),
+    (re.compile(r"\b(?:password|passcode|otp|one[ -]?time|login|credentials?)\b", re.I), 2.0),
+    (re.compile(r"\b(?:verify|confirm|validate|review|update|submit)\b", re.I), 1.0),
+    (re.compile(r"\b(?:https?://|www\.)", re.I), 1.0),
+    (re.compile(r"\b(?:attached|attachment|enclosed)\b", re.I), 1.0),
+    (re.compile(r"!{2,}"), 1.0),
+)
+
+
+def contextual_penalty(subject: str, body: str = "", html: str = "") -> float:
+    """Return a small, explainable deduction for weak contextual signals."""
+    text = " ".join(
+        part for part in (subject or "", BeautifulSoup(body or "", "html.parser").get_text(" ", strip=True),
+                          BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True))
+        if part
+    )
+    penalty = sum(weight for pattern, weight in _CONTEXT_SIGNALS if pattern.search(text))
+    if re.search(r"\b[A-Z]{4,}\b", subject or ""):
+        penalty += 1.0
+    return round(min(12.0, penalty), 2)
 
 def validate_content(subject: str, body: str = "", html: str = "") -> dict:
     """Preserve original OMG text/HTML checks. Optional ML is explicitly opt-in.
@@ -29,6 +57,7 @@ def validate_content(subject: str, body: str = "", html: str = "") -> dict:
             logger.exception("Content inspection failed: %s",name)
             coverage[name] = "failed"
             findings.append({"code": name.upper()+"_FAILED", "category":"INSPECTION_FAILURE",
+                             "severity":"HIGH", "confidence":1.0,
                              "message":f"{name} failed ({type(exc).__name__})"})
     try:
         findings.extend(inspect_contextual_risks(subject, body, html))
@@ -44,10 +73,12 @@ def validate_content(subject: str, body: str = "", html: str = "") -> dict:
             from .experimental_tfidf import inspect_patterns as inspect_legacy_patterns
             legacy = inspect_legacy_patterns(subject, combined)
             if legacy:
+                risk = float(legacy[0].get("risk_score", 0.0) or 0.0)
                 findings.append({
                     "code": "EXPERIMENTAL_TFIDF_REVIEW",
                     "category": "EXPERIMENTAL_REVIEW",
-                    "severity": "MINOR",
+                    "severity": "MEDIUM" if risk >= 65.0 else "LOW",
+                    "confidence": 0.5,
                     "message": "Experimental synthetic TF-IDF catalogue matched. Manual review recommended; not a validated model.",
                 })
                 coverage["experimental_tfidf"] = "matched_review_only"
@@ -74,9 +105,19 @@ def validate_content(subject: str, body: str = "", html: str = "") -> dict:
             coverage["ml_classifier"]="required_unavailable" if settings.REQUIRE_ML else "optional_unavailable"
             if settings.REQUIRE_ML:
                 findings.append({"code":"ML_INSPECTION_INCOMPLETE","category":"INSPECTION_FAILURE",
+                                 "severity":"HIGH", "confidence":1.0,
                                  "message":"Required email ML inspection unavailable."})
     elif settings.REQUIRE_ML:
         coverage["ml_classifier"]="required_unavailable"
         findings.append({"code":"ML_INSPECTION_INCOMPLETE","category":"INSPECTION_FAILURE",
+                         "severity":"HIGH", "confidence":1.0,
                          "message":"Required email ML inspection disabled."})
-    return {"findings":findings,"coverage":coverage,"model_version":model_version}
+    try:
+        penalty = contextual_penalty(subject, body, html)
+        coverage["contextual_signals"] = "complete"
+    except Exception as exc:
+        logger.exception("Contextual signal scoring failed")
+        penalty = 0.0
+        coverage["contextual_signals"] = "optional_unavailable"
+    return {"findings":findings,"coverage":coverage,"model_version":model_version,
+            "context_penalty":penalty}
