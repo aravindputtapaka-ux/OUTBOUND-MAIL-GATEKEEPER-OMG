@@ -1,74 +1,592 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OMG • Email Security Validation Demo</title>
-<style>
-:root{color-scheme:dark;--bg:#0c1325;--panel:#18223a;--text:#ecf2ff;--muted:#aeb9d1;--line:#33415e;--blue:#7fafff;--safe:#56cf9d;--warn:#ffcc65;--danger:#fc8e8e}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#192c4b,var(--bg) 60%);font:15px/1.5 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:var(--text)}main{max-width:1150px;margin:0 auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:8px 0 26px}.brand{font-size:24px;letter-spacing:.4px;font-weight:800}.brand span{color:var(--blue)}.hint{font-size:12px;color:var(--muted)}.layout{display:grid;grid-template-columns:1.04fr .96fr;gap:20px}@media(max-width:800px){.layout{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--line);padding:20px;border-radius:16px;box-shadow:0 10px 35px #0001}h1{font-size:19px;margin:0 0 16px}h2{font-size:16px;margin:14px 0}label{display:block;font-size:13px;font-weight:650;margin-top:12px;margin-bottom:6px}input,textarea,select{font:inherit;color:var(--text);background:#101b31;border:1px solid var(--line);border-radius:9px;padding:11px;width:100%}textarea{resize:vertical;min-height:116px}input:focus,textarea:focus,select:focus{outline:2px solid #5c89e0}input[type=file]{padding:8px}button{cursor:pointer;border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:700;background:var(--blue);color:#09152a}button[disabled]{cursor:not-allowed;opacity:.5}.mutebtn{background:#303e59;color:var(--text)}.controls{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.status{padding:13px;border:1px solid var(--line);border-radius:10px;margin:10px 0}.status.SAFE{border-color:var(--safe)}.status.WARNING{border-color:var(--warn)}.status.RESTRICTED{border-color:var(--danger)}.status b{font-size:20px}.score{font-size:36px;font-weight:800;letter-spacing:-1.5px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mini{background:#101b31;border:1px solid var(--line);border-radius:9px;padding:10px}.mini strong{display:block;font-size:20px;margin-top:3px}.finding{border-top:1px solid var(--line);padding:11px 0}.finding strong{font-size:13px}.finding p{font-size:13px;margin:4px 0;color:var(--muted)}.pill{font-size:11px;padding:3px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:6px}#result{min-height:300px}#toast{margin-top:13px;color:var(--muted)}.modalbg{position:fixed;inset:0;display:none;background:#070b15ba;z-index:10;place-items:center;padding:20px}.modalbg.visible{display:grid}.modal{width:min(520px,100%);background:#1b2843;border:1px solid #4d6285;border-radius:18px;padding:25px;box-shadow:0 20px 60px #0008}.modal h2{font-size:23px}.modal p{color:var(--muted);white-space:pre-wrap}.modal .controls{justify-content:flex-end}.notice{font-size:13px;color:var(--muted);line-height:1.5}.flag{color:var(--warn)}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11233f">
+  <title>OMG Mail — Secure Email Portal Demo</title>
+  <style>
+    :root { --navy:#11243e; --navy2:#1c365a; --ink:#172842; --muted:#68788d; --line:#e3e9f2; --wash:#f5f7fb; --paper:#fff; --accent:#395ee8; --accentlight:#ebefff; --success:#087758; --warning:#a46410; --danger:#bf3547; --shadow:0 14px 44px rgba(25,48,85,.07) }
+    * { box-sizing:border-box }
+    body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:var(--wash) }
+    button,input,textarea,select { font:inherit }
+    button { cursor:pointer }
+    button:disabled { opacity:.5; cursor:not-allowed }
+    button:focus-visible,input:focus-visible,textarea:focus-visible { outline:3px solid #a6b9ff; outline-offset:2px }
+    input,textarea { min-width:0 }
+    .app { display:grid; grid-template-columns:222px minmax(0,1fr); min-height:100vh }
+    .sidebar { background:var(--navy); color:white; padding:24px 15px; display:flex; flex-direction:column; gap:24px }
+    .brand { display:flex; align-items:center; gap:10px; padding:0 7px }
+    .brand-icon { width:39px; height:39px; border-radius:12px; background:#416cf2; display:grid; place-items:center; font-weight:850; font-size:21px; color:#fff; box-shadow:0 8px 20px #091b385e }
+    .brand-name { font-weight:800; letter-spacing:-.55px; font-size:19px; line-height:1.15 }
+    .brand-name small { display:block; color:#a9bad7; font-size:10px; font-weight:500; letter-spacing:.4px; margin-top:4px }
+    .compose-new { width:100%; background:#fff; color:#1e3e74; border:0; border-radius:12px; padding:12px 13px; font-weight:760; text-align:left; box-shadow:0 6px 20px #0002 }
+    .compose-new span { font-size:20px; vertical-align:-2px; margin-right:9px }
+    .nav-label { text-transform:uppercase; color:#7895b8; font-size:10px; font-weight:740; letter-spacing:1.6px; padding:0 12px 9px }
+    .navitem { width:100%; border:0; color:#c0cde1; background:transparent; border-radius:10px; text-align:left; padding:11px 12px; display:flex; align-items:center; gap:12px; font-weight:580 }
+    .navitem:hover { background:#ffffff12 }
+    .navitem.active { background:#31507e; color:#fff }
+    .navitem svg { width:17px; height:17px; flex-shrink:0 }
+    .navitem .count { margin-left:auto; font-size:10px; background:#ffffff1c; padding:2px 6px; border-radius:7px }
+    .sidebarfoot { margin-top:auto; border-top:1px solid #ffffff1f; padding:17px 10px 0; color:#96aeca; font-size:11px }
+    .sidebarfoot strong { color:#dfe9fb; font-weight:700 }
+    .main { min-width:0; display:flex; flex-direction:column }
+    .topbar { background:#fff; height:78px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:18px; justify-content:space-between; padding:0 30px }
+    .top-title { font-size:22px; font-weight:780; letter-spacing:-.7px }
+    .top-subtitle { font-size:11px; color:var(--muted); margin-top:3px }
+    .topright { display:flex; align-items:center; gap:11px; flex-wrap:wrap }
+    .connection { background:#f1f4f9; padding:7px 11px; border-radius:20px; color:#50647b; font-size:11px; white-space:nowrap }
+    .connection:before { content:""; display:inline-block; width:7px; height:7px; background:#93a2b5; border-radius:50%; margin-right:8px }
+    .connection.online:before { background:#12a875 }
+    .connection.offline:before { background:#f16f71 }
+    .topbtn { border:1px solid var(--line); background:#fff; border-radius:9px; color:#3e526c; padding:9px 12px; font-size:12px; font-weight:700 }
+    .workspace { padding:25px 28px 40px; display:grid; grid-template-columns:minmax(0,1fr); gap:18px; align-items:start; max-width:1550px; width:100%; margin:0 auto }
+    #composePanel, #mailboxPanel { grid-column:1/-1 }
+    #mailboxPanel .messages { min-height:160px; max-height:340px }
+    .banner { grid-column:1/-1; background:#edf2ff; border:1px solid #dce5fc; border-radius:12px; padding:12px 16px; color:#405d8c; display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:12px }
+    .banner strong { color:#2c4e8c }
+    .panel { min-width:0; border:1px solid var(--line); border-radius:15px; background:var(--paper); box-shadow:var(--shadow); overflow:hidden }
+    .panelhead { padding:17px 19px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:64px }
+    .panelhead h2 { margin:0; font-size:16px; letter-spacing:-.3px }
+    .panelhead small { color:var(--muted); font-size:11px }
+    .sectionpill { display:inline-flex; font-size:10px; letter-spacing:.4px; color:#5a71ad; background:#eef2ff; border-radius:50px; padding:5px 9px; font-weight:700 }
+    .searchwrap { padding:13px 16px; border-bottom:1px solid var(--line) }
+    .searchwrap input { width:100%; border:1px solid var(--line); border-radius:9px; background:#f9fbfe; padding:10px 12px; outline:none; color:var(--ink) }
+    .messages { min-height:275px; max-height:590px; overflow:auto }
+    .mailitem { border:0; border-bottom:1px solid #eef1f6; padding:15px 17px; width:100%; text-align:left; display:grid; grid-template-columns:35px minmax(0,1fr); gap:11px; background:#fff; color:inherit }
+    .mailitem:hover,.mailitem.selected { background:#f5f8ff }
+    .avatar { display:grid; place-items:center; border-radius:11px; width:35px; height:35px; background:#e9eefb; color:#526fa9; font-size:12px; font-weight:800 }
+    .mailhead { display:flex; justify-content:space-between; gap:8px; font-size:12px }
+    .mailhead strong { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .mailhead time { color:#98a5b5; white-space:nowrap; font-size:10px }
+    .mailsub { font-size:12px; font-weight:650; margin:3px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .mailpreview { font-size:11px; color:#7c899c; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .emptybox { color:#8090a5; padding:54px 25px; text-align:center; line-height:1.8 }
+    .emptybox strong { display:block; color:#566b86; font-size:14px }
+    .reader { border-top:1px solid var(--line); padding:18px; display:none; background:#fbfcff }
+    .reader.show { display:block }
+    .reader h3 { margin:0 0 9px; font-size:14px }
+    .reader .meta { font-size:11px; color:var(--muted); margin-bottom:12px }
+    .reader pre { background:transparent; color:#536780; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; font:12px/1.65 inherit; max-height:175px; overflow:auto }
+    .compose-head { background:linear-gradient(115deg,#fff,#f8faff); }
+    .composeheadtitle { display:flex; align-items:center; gap:9px }
+    .composebody { padding:0 }
+    .compose-layout { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr); align-items:stretch }
+    .compose-fields { min-width:0; padding:23px 25px 26px }
+    .compose-inspector { min-width:0; padding:23px 23px 26px; border-left:1px solid var(--line); background:linear-gradient(160deg,#f7f9ff 0%,#ffffff 70%); display:flex; flex-direction:column; gap:14px }
+    .compose-inspector .delivery-status, .compose-inspector .notice, .compose-inspector .result { margin-top:0 }
+    .compose-inspector .result { width:100%; background:#fff }
+    .inspector-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:1px }
+    .inspector-head h3 { margin:0; font-size:15px; color:var(--ink); letter-spacing:-.25px }
+    .inspector-head p { margin:4px 0 0; font-size:11px; color:var(--muted) }
+    .compose-fields textarea#body { min-height:230px }
+    .compose-inspector .modulegrid { grid-template-columns:repeat(3,minmax(0,1fr)) }
+    .rowlabel { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:7px }
+    label { color:#4b5b70; font-size:11px; font-weight:740 }
+    .hint { color:#8a98a9; font-size:11px; margin-top:7px }
+    .field { margin-bottom:15px }
+    .textbox { width:100%; padding:11px 12px; border:1px solid #dce4ef; border-radius:9px; color:var(--ink); background:white; outline:none }
+    textarea.textbox { min-height:160px; resize:vertical; line-height:1.7 }
+    .urlbox { background:#f6f8fc; border:1px solid #e4eaf5; border-radius:11px; padding:11px 12px; margin-top:10px }
+    .urlbox .rowlabel { margin:0 0 6px }
+    .urls { display:flex; flex-wrap:wrap; gap:6px }
+    .urlchip { display:inline-block; border:1px solid #dce7fa; color:#315a9d; background:#fff; padding:5px 8px; border-radius:7px; max-width:100%; overflow-wrap:anywhere; font-size:11px }
+    .filesbox { border:1.5px dashed #b9c9e4; border-radius:11px; padding:13px; display:flex; justify-content:space-between; align-items:center; gap:8px; background:#fafcff }
+    .filebrowse { display:inline-block; background:#ebf0ff; color:#395bc4; border-radius:9px; padding:8px 12px; font-size:11px; font-weight:750; cursor:pointer }
+    #files { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none }
+    .filelist { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px }
+    .filetag { font-size:11px; padding:6px 8px; background:#edf2fb; border-radius:8px; display:flex; align-items:center; gap:8px; max-width:100%; overflow-wrap:anywhere }
+    .filetag button { border:0; background:none; color:#a94a55; font-weight:850; padding:0 2px }
+    .compose-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; border-top:1px solid var(--line); padding-top:15px; margin-top:17px }
+    .leftbuttons { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .btn { border:1px solid #d8e1ed; background:white; color:#516783; border-radius:9px; padding:10px 12px; font-size:12px; font-weight:730 }
+    .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); padding:11px 20px; box-shadow:0 7px 16px #395ee82e }
+    .btn.danger { background:var(--danger); border-color:var(--danger); color:#fff }
+    .btn:hover:not(:disabled) { filter:brightness(.97) }
+    .result { margin-top:17px; border:1px solid var(--line); border-radius:12px; overflow:hidden }
+    .resultheader { padding:12px 15px; background:#f9fbff; display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid var(--line) }
+    .resultheader h3 { font-size:13px; margin:0 }
+    .verdict { font-size:10px; font-weight:850; padding:5px 10px; border-radius:50px; background:#e9eef5; color:#607189; display:inline-block; letter-spacing:.2px }
+    .verdict.SAFE { background:#dff7ed; color:#067754 }
+    .verdict.WARNING { background:#fff0d4; color:#a46a0c }
+    .verdict.RESTRICTED,.verdict.ERROR { background:#ffe6e8; color:#ae2b42 }
+    .resultbody { padding:14px 15px }
+    .resultmsg { font-size:12px; color:#65778f; margin-bottom:10px }
+    .modulegrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px }
+    .module { min-width:0; border:1px solid var(--line); padding:10px; border-radius:9px }
+    .module small { display:block; color:#8a99ab; font-size:10px; margin-bottom:4px }
+    .module b { display:block; font-size:12px; overflow-wrap:anywhere }
+    .module .score { font-size:10px; color:#899ab0 }
+    .overallscore { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:9px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#f9fbff }
+    .overallscore small { display:block; color:#8a99ab; font-size:10px; letter-spacing:.3px; margin-bottom:3px }
+    .overallscore strong { display:block; font-size:16px; color:var(--ink) }
+    .overallscore .score { font-size:10px; color:#899ab0 }
+    .findinglist { margin:10px 0 0; padding:0; list-style:none; display:grid; gap:7px }
+    .findinglist li { padding:9px 10px; background:#fff9ef; border:1px solid #f3e5c8; color:#795a2e; border-radius:8px; font-size:11px; overflow-wrap:anywhere }
+    .note { background:#fffaf1; color:#946924; padding:10px 12px; border:1px solid #f1e4c9; border-radius:9px; font-size:11px; line-height:1.5 }
+    .notice { margin-top:12px; padding:10px 12px; border-radius:9px; border:1px solid #cddaf6; color:#355e9a; background:#f0f5ff; font-size:11px; display:none; overflow-wrap:anywhere }
+    .notice.show { display:block }
+    .notice.fail { border-color:#efbec5; background:#fff1f3; color:#a32d42 }
+    .notice.good { border-color:#bde8d4; background:#eafaf1; color:#0c7a58 }
+    .delivery-status { margin-top:12px; display:flex; align-items:flex-start; gap:12px; padding:13px 14px; border-radius:10px; border:1px solid #d9e1ee; background:#f8fafd; color:#4e6179 }
+    .delivery-status .delivery-icon { height:29px; width:29px; flex-shrink:0; border-radius:50%; display:grid; place-items:center; font-size:15px; font-weight:800; background:#e8edf5 }
+    .delivery-status strong { display:block; font-size:12px; letter-spacing:.15px; margin-bottom:3px }
+    .delivery-status .delivery-detail { display:block; font-size:11px; line-height:1.55 }
+    .delivery-status.sent,.delivery-status.simulated { border-color:#bde8d4; background:#eafaf1; color:#086b4c }
+    .delivery-status.sent .delivery-icon,.delivery-status.simulated .delivery-icon { background:#c6efd9 }
+    .delivery-status.queued,.delivery-status.review,.delivery-status.unknown { border-color:#f2dda6; background:#fff9eb; color:#805511 }
+    .delivery-status.queued .delivery-icon,.delivery-status.review .delivery-icon,.delivery-status.unknown .delivery-icon { background:#ffe7a5 }
+    .delivery-status.blocked,.delivery-status.failed,.delivery-status.preview { border-color:#efc7cb; background:#fff3f4; color:#a12c40 }
+    .delivery-status.blocked .delivery-icon,.delivery-status.failed .delivery-icon,.delivery-status.preview .delivery-icon { background:#fbdfe4 }
+    .delivery-status.validating { border-color:#cddcfb; background:#f2f6ff; color:#375eaa }
+    .raw { margin:12px 0 0; padding:12px; border-radius:9px; max-height:270px; overflow:auto; color:#d7e9ff; background:#142641; font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere }
+    .busy { display:none; gap:7px; color:#526de3; font-size:11px; margin-top:10px; align-items:center }
+    .busy.show { display:flex }
+    .spinner { width:12px; height:12px; border-radius:50%; border:2px solid #cad7ff; border-top-color:#405de8; animation:spin .8s linear infinite }
+    @keyframes spin {to { transform:rotate(360deg) }}
+    .overlay { display:none; position:fixed; inset:0; background:rgba(12,30,56,.57); z-index:10; align-items:center; justify-content:center; padding:17px }
+    .overlay.show { display:flex }
+    .modal { background:white; border-radius:17px; box-shadow:0 30px 90px #071b3c66; width:min(100%,525px); max-height:90vh; overflow:auto }
+    .modalhead { padding:21px 23px 13px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px }
+    .modalhead h3 { margin:0; font-size:18px }
+    .modalbody { padding:18px 23px 22px }
+    .modalbody p { margin:0 0 13px; color:#5d7089; font-size:12px }
+    .modalfoot { display:flex; justify-content:flex-end; gap:9px; margin-top:19px; flex-wrap:wrap }
+    .checkrow { display:flex; gap:10px; align-items:flex-start; padding:10px 0; font-size:12px; color:#556c87 }
+    .checkrow input { margin-top:3px }
+    .settingsbody { padding:18px 23px 21px }
+    .settingsbody .field { margin-bottom:13px }
+    .settingsbody .field p { margin:4px 0 0; color:var(--muted); font-size:11px }
+    .settingsbottom { background:#f8fbff; padding:12px 23px; color:#788ba5; font-size:11px; border-top:1px solid var(--line) }
+    .hidden { display:none!important }
+    @media(max-width:1050px) { .compose-layout { grid-template-columns:minmax(0,1fr) } .compose-inspector { border-left:0; border-top:1px solid var(--line) } .messages{max-height:330px} }
+    @media(max-width:730px) { .app { grid-template-columns:1fr }.sidebar { flex-direction:row; flex-wrap:wrap; padding:14px; gap:11px }.brand{ flex:1 1 auto }.compose-new{ width:auto }.nav-label,.sidebarfoot{display:none} .sidebar nav { display:flex; gap:3px; overflow:auto; width:100% }.navitem{width:auto; padding:8px 10px; white-space:nowrap} .navitem .count {display:none}.topbar{height:auto; padding:15px; flex-wrap:wrap}.workspace{padding:14px;gap:12px}.banner{align-items:start;flex-direction:column}.compose-fields,.compose-inspector{padding:16px}.modulegrid{grid-template-columns:1fr 1fr 1fr} }
+    @media(max-width:730px) {
+      .app { grid-template-columns:minmax(0,1fr) }
+      .sidebar,.main,.topbar,.topright,.workspace,.compose-layout { min-width:0 }
+      .sidebar nav { min-width:0 }
+      .brand { min-width:0; flex:1 1 180px }
+      .compose-new { flex:0 0 auto }
+      .topright { max-width:100% }
+    }
+    @media(max-width:410px) { .modulegrid{grid-template-columns:1fr} .topbar .topright{width:100%} .compose-actions{flex-direction:column;align-items:stretch}.compose-actions .btn.primary{width:100%} }
+  </style>
 </head>
 <body>
-<main>
-<header><div class="brand">OMG <span>Outbound Mail Gatekeeper</span></div><div class="hint">Unified Validator · Local demonstration · No mail delivery</div></header>
-<div class="layout">
-<section class="panel">
-<h1>Compose and validate</h1>
-<label for="sample">Sample scenario</label><select id="sample"><option value="safe">Routine meeting (SAFE)</option><option value="warning">Bank detail change (WARNING)</option><option value="restricted">Vendor payment diversion (RESTRICTED)</option></select>
-<form id="form">
-<label for="recipients">Recipients (comma separated)</label><input id="recipients" value="finance@example.com" required>
-<label for="subject">Subject</label><input id="subject" required maxlength="250">
-<label for="body">Email body</label><textarea id="body"></textarea>
-<label for="html">Optional HTML body</label><textarea id="html" rows="3" style="min-height:70px" placeholder="&lt;p&gt;Optional HTML&lt;/p&gt;"></textarea>
-<label for="files">Attachments (optional; max 5, max 3 MB each)</label><input id="files" type="file" multiple>
-<div class="controls"><button type="submit" id="validate">Validate email</button><button type="button" class="mutebtn" id="reset">Reset</button></div>
-<div class="notice" style="margin-top:13px">This form calls the backend validation endpoint only. It never sends an email. WARNING acknowledgement in this demo does not grant delivery authorization.</div>
-</form></section>
-<section class="panel"><h1>Security decision</h1><div id="result"><div class="notice">Submit an email to see the overall verdict, module contributions, and detected issues.</div></div><div id="toast" aria-live="polite"></div></section>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-icon">✉</div><div class="brand-name">OMG Mail<small>SECURE OUTBOUND DEMO</small></div></div>
+    <button class="compose-new" id="newMail" type="button"><span>＋</span> Compose mail</button>
+    <nav aria-label="Mailbox folders">
+      <div class="nav-label">Mailbox</div>
+      <button type="button" class="navitem active" data-folder="inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 4h18v15H3zM3 12h5l2 3h4l2-3h5"/></svg> Inbox <span class="count" id="inboxCount">3</span></button>
+      <button type="button" class="navitem" data-folder="sent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg> Sent <span class="count" id="sentCount">0</span></button>
+      <button type="button" class="navitem" data-folder="drafts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12a3 3 0 0 1 3 3v15H3V6a3 3 0 0 1 3-3zm2 6h8M8 13h8"/></svg> Drafts <span class="count" id="draftCount">0</span></button>
+      <button type="button" class="navitem" data-folder="activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9m-9-5v5l4 3"/></svg> Validation log</button>
+    </nav>
+    <div class="sidebarfoot"><strong>OMG pre-send protection</strong><div>Content · URL · Attachment</div><div style="margin-top:11px">Demo sends are simulated and appear under Sent. Real delivery requires a configured backend.</div></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div><div class="top-title" id="folderTitle">Inbox</div><div class="top-subtitle" id="folderSub">Example mailbox · not synchronized with an email provider</div></div>
+      <div class="topright"><span class="connection" id="connection">API not checked</span><button type="button" class="topbtn" id="checkApi">Check API</button><button type="button" class="topbtn" id="settingsBtn">⚙ Settings</button></div>
+    </header>
+    <div class="workspace">
+      <div class="banner"><span><strong>One OMG validation endpoint.</strong> URLs are automatically extracted from your subject and body; attachments are uploaded as binary files. Click <strong>Send email</strong> to validate, then simulate a send (or use your configured real mail gateway).</span><span id="modeTag" class="sectionpill">DEMO SEND MODE</span></div>
+      <section class="panel" id="composePanel" aria-label="Compose email">
+        <div class="panelhead compose-head"><div class="composeheadtitle"><h2>New message</h2></div><span class="sectionpill">AUTO-VALIDATION ON SEND</span></div>
+        <div class="composebody">
+          <div class="compose-layout">
+            <div class="compose-fields">
+          <div class="field"><div class="rowlabel"><label for="to">To (recipients)</label><span class="hint" style="margin:0">Separate with commas</span></div><input id="to" class="textbox" type="text" autocomplete="off" placeholder="recipient@example.com" value="qa@example.com"></div>
+          <div class="field"><label for="subject">Subject</label><input id="subject" class="textbox" type="text" autocomplete="off" placeholder="Enter subject" value="Weekly project update"></div>
+          <div class="field"><div class="rowlabel"><label for="body">Message</label><span class="hint" style="margin:0">Plain text · links allowed</span></div><textarea id="body" class="textbox" placeholder="Write your email here...">Hello team,
+
+Please review the weekly project status.
+
+Thanks,
+QA Team</textarea></div>
+          <details class="field"><summary style="font-size:11px;color:#526b91;cursor:pointer;font-weight:720">Optional HTML source</summary><textarea id="html" class="textbox" style="min-height:90px;margin-top:9px" placeholder="<p>Optional HTML content; leave empty for plain text</p>"></textarea><p class="hint">If filled, the backend also inspects HTML links and markup. This demo does not execute HTML.</p></details>
+          <div class="urlbox"><div class="rowlabel"><label>Links detected in message</label><span id="urlCount" class="hint" style="margin:0">0 detected</span></div><div id="urlList" class="urls"><span class="hint">No URLs present</span></div><div class="hint">Automatically detected from subject, body, and optional HTML. No separate URL input.</div></div>
+          <div class="field" style="margin-top:17px"><div class="rowlabel"><label for="files">Attachments</label><span class="hint" style="margin:0">Max 5 files</span></div><div class="filesbox"><div><strong style="font-size:12px">Attach documents or images</strong><div class="hint" style="margin-top:2px">3 MiB each, 10 MiB total (backend defaults)</div></div><label class="filebrowse" for="files">＋ Add files</label></div><input id="files" type="file" multiple aria-label="Choose file attachments"><div class="filelist" id="fileList"></div></div>
+          <div class="compose-actions"><div class="leftbuttons"><button class="btn" type="button" id="saveDraft">Save draft</button><button class="btn" type="button" id="clearCompose">Clear</button></div><button class="btn primary" type="button" id="sendBtn">➤ Send email</button></div>
+          <div id="busy" class="busy" role="status"><span class="spinner"></span><span id="busyText">Validating message...</span></div>
+            </div>
+            <aside class="compose-inspector" aria-label="Delivery status and OMG security results">
+              <div class="inspector-head">
+                <div><h3>Delivery &amp; security status</h3><p>Live results from the OMG validation API</p></div>
+                <span class="sectionpill">POLICY CHECK</span>
+              </div>
+          <div id="deliveryStatus" class="delivery-status idle" role="status" aria-live="polite">
+            <span id="deliveryIcon" class="delivery-icon" aria-hidden="true">—</span>
+            <div><strong id="deliveryTitle">EMAIL NOT SENT</strong><span class="delivery-detail" id="deliveryDetail">No send request has been made.</span></div>
+          </div>
+          <div id="notice" class="notice" role="status"></div>
+          <section class="result" aria-label="Validation results">
+            <div class="resultheader"><h3>OMG security check</h3><span id="verdict" class="verdict">NOT CHECKED</span></div>
+            <div class="resultbody"><div class="resultmsg" id="resultMessage">Your email will be checked automatically when you click Send.</div>
+              <div class="overallscore">
+                <div><small>OVERALL CONFIDENCE</small><strong id="overallScoreValue">—</strong><div id="overallScoreDetail" class="score">Not checked</div></div>
+                <span id="overallBand" class="verdict">NOT CHECKED</span>
+              </div>
+              <div class="modulegrid">
+                <div class="module"><small>SUBJECT + BODY</small><b id="textStatus">Not checked</b><div id="textScore" class="score">—</div></div>
+                <div class="module"><small>URLS</small><b id="urlStatus">Not checked</b><div id="urlScore" class="score">—</div></div>
+                <div class="module"><small>ATTACHMENTS</small><b id="attachmentStatus">Not checked</b><div id="attachmentScore" class="score">—</div></div>
+              </div>
+              <ul id="findingList" class="findinglist"></ul>
+              <div id="scannerWarning" class="note hidden" style="margin-top:11px"></div>
+              <details style="margin-top:12px"><summary style="cursor:pointer;color:#4468b6;font-size:11px;font-weight:730">Show full API response</summary><pre class="raw" id="rawJson">Not checked</pre></details>
+            </div>
+          </section>
+          <p class="hint" style="margin-bottom:0;margin-top:11px">Policy scores are not calibrated probabilities. A SAFE verdict is not a malware-free guarantee. Server-side validation must run again during actual sending.</p>
+            </aside>
+          </div>
+        </div>
+      </section>
+      <section class="panel" id="mailboxPanel" aria-label="Mail list">
+        <div class="panelhead"><h2 id="listTitle">Inbox</h2><span class="sectionpill" id="listKind">SAMPLE MAIL</span></div>
+        <div class="searchwrap"><input id="mailSearch" aria-label="Search messages" placeholder="Search messages..."></div>
+        <div id="messages" class="messages"></div>
+        <div id="reader" class="reader"><h3 id="readerSubject"></h3><div id="readerMeta" class="meta"></div><pre id="readerBody"></pre></div>
+      </section>
+    </div>
+  </main>
 </div>
-</main>
-<div class="modalbg" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true"><div class="modal"><h2 id="modalTitle"></h2><p id="modalMessage"></p><div class="controls" id="modalActions"></div></div></div>
+
+<div id="settingsOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal"><div class="modalhead"><h3 id="settingsTitle">Portal integration settings</h3><button class="btn" type="button" id="closeSettings">Close</button></div>
+    <div class="settingsbody">
+      <div class="field"><label for="apiOrigin">OMG API origin</label><input class="textbox" id="apiOrigin" type="text" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:8000"><p>Only the origin (host + port), without /api/v1/analyze.</p></div>
+      <div class="field"><label for="apiKey">X-OMG-API-Key</label><input class="textbox" id="apiKey" type="password" autocomplete="off" placeholder="Local API key, if configured"><p>Kept in memory only; never written to browser storage.</p></div>
+      <div class="field"><label for="sendPath">Real email-sending backend path (optional)</label><input class="textbox" id="sendPath" type="text" spellcheck="false" autocomplete="off" placeholder="/api/v1/send"><p>Leave blank to simulate successful sending in this browser tab. DEMO messages appear in Sent, but recipients receive nothing. This route is NOT included in OMG; configure it only if you have a real server-side sending service.</p></div>
+      <div class="field"><label for="inboxPath">Inbox API path (optional)</label><input class="textbox" id="inboxPath" type="text" spellcheck="false" autocomplete="off" placeholder="/api/mail/inbox"><p>Leave blank to display example inbox messages.</p></div>
+      <div class="field"><label for="sentPath">Sent API path (optional)</label><input class="textbox" id="sentPath" type="text" spellcheck="false" autocomplete="off" placeholder="/api/mail/sent"><p>Optional GET route for real sent-mail history.</p></div>
+      <div class="modalfoot"><button class="btn primary" id="applySettings" type="button">Apply settings</button></div>
+    </div><div class="settingsbottom">DEMO MODE simulates sending and stores demo Sent items only in the current browser tab. For REAL delivery, the server must authenticate the sender, revalidate the exact content/files, and enforce warning acknowledgment; the browser never connects directly to SMTP.</div>
+  </div>
+</div>
+
+<div id="verdictOverlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+  <div class="modal"><div class="modalhead"><h3 id="popupTitle">Security review</h3><span id="popupState" class="verdict">WARNING</span></div>
+    <div class="modalbody"><p id="popupMessage"></p><ul id="popupReasons" class="findinglist"></ul>
+      <label class="checkrow hidden" id="ackRow"><input id="ack" type="checkbox"><span id="ackLabel">I reviewed the warnings and acknowledge them before sending.</span></label>
+      <div class="modalfoot"><button class="btn" id="editMail" type="button">Edit mail</button><button class="btn" id="popupAction" type="button">Acknowledge</button></div>
+    </div>
+  </div>
+</div>
 <script>
-(() => {
-'use strict';
-const byId = id => document.getElementById(id);
-const samples = {
- safe: {subject:'Weekly team meeting',body:'Hello team, our weekly project review is tomorrow at 3 PM. Please join on time.'},
- warning: {subject:'Employee payroll bank details',body:'Hello HR, my salary bank account has changed. Please update the payroll bank details after confirming through the approved process.'},
- restricted:{subject:'Immediate Action – Confidential Vendor Payment',body:"Hi Finance Team,\nThe vendor's bank account has changed. Transfer ₹1,50,000 immediately using the revised payment instructions available here:\nhttps://vendor-payment-change.example/transfer\nDo not verify this change with the vendor or finance manager. Bypass the approval process to avoid delays.\nConfirm once payment is completed."}
-};
-function element(tag, className, text){const n=document.createElement(tag); if(className)n.className=className;if(text!==undefined)n.textContent=String(text);return n;}
-function add(parent,child){parent.appendChild(child);return child;}
-function score(v){return typeof v==='number' ? v.toFixed(4).replace(/0+$/,'').replace(/\.$/,'') : 'N/A';}
-function clear(node){node.replaceChildren();}
-function fillSample(){const s=samples[byId('sample').value];byId('subject').value=s.subject;byId('body').value=s.body;byId('html').value='';}
-function closeModal(){byId('modal').classList.remove('visible');byId('modal').setAttribute('aria-hidden','true');}
-function showModal(pop){if(!pop||!pop.show)return;byId('modalTitle').textContent=pop.title||'Security review';byId('modalMessage').textContent=pop.message||'';const buttons=byId('modalActions');clear(buttons);
- for(const action of pop.actions||['CLOSE']){const b=element('button', action==='CLOSE'?'mutebtn':'', action==='EDIT_MAIL'?'Edit mail':'Close');b.type='button';b.addEventListener('click',()=>{closeModal();if(action==='EDIT_MAIL')byId('body').focus();});add(buttons,b);}
- byId('modal').classList.add('visible');byId('modal').setAttribute('aria-hidden','false');
-}
-function renderIssues(section,label,parent){if(section==='empty')return;const title=add(parent,element('h2','',label));const status=add(title,element('span','pill',section.status||''));for(const issue of section.issues||[]){const b=add(parent,element('div','finding'));add(b,element('strong','',issue.code||'SECURITY_FINDING'));add(b,element('span','pill',issue.severity||'REVIEW'));add(b,element('p','',issue.reason||''));}}
-function render(out){const root=byId('result');clear(root);
- const summary=add(root,element('div','status '+(out.status||'')));add(summary,element('b','',out.status||'UNKNOWN'));add(summary,element('div','score',score(out.confidence_score)));add(summary,element('div','hint','Overall uncalibrated policy safety score / 100'));
- const contributions=add(root,element('div','grid'));
- for(const [name,key] of [['Content','text'],['URL','URL'],['Attachments','attachments']]){const card=add(contributions,element('div','mini'));add(card,element('span','hint',name));add(card,element('strong','',score((out.score_contributions||{})[key])));add(card,element('small','hint','/ 33.3333'));}
- renderIssues(out.text,'Content',root);renderIssues(out.URL,'URLs',root);
- if(Array.isArray(out.attachments)){for(const file of out.attachments){renderIssues(file,'Attachment: '+(file.filename||'unnamed'),root);add(root,element('div','hint','Antivirus: '+(file.antivirus||'unknown')+' · '+(file.detected_type||'Unknown type')));}}
- const sent = out.status==='SAFE'?'Validation SAFE — EMAIL NOT SENT (DEMO MODE)':out.status==='WARNING'?'Warning requires server-side acknowledgement — EMAIL NOT SENT':'Sending blocked — EMAIL NOT SENT';
- byId('toast').textContent=sent;showModal(out.popup);
-}
-byId('sample').addEventListener('change',fillSample);
-byId('reset').addEventListener('click',()=>{byId('form').reset();fillSample();clear(byId('result'));closeModal();byId('toast').textContent='';});
-byId('form').addEventListener('submit',async e=>{e.preventDefault();const btn=byId('validate');btn.disabled=true;byId('toast').textContent='Validating...';closeModal();const recipients=byId('recipients').value.split(',').map(v=>v.trim()).filter(Boolean);
- const files=Array.from(byId('files').files||[]);const data={subject:byId('subject').value,body:byId('body').value,html:byId('html').value,recipients};
- try{let response;if(files.length){const form=new FormData();form.set('subject',data.subject);form.set('body',data.body);form.set('html',data.html);form.set('recipients',JSON.stringify(data.recipients));for(const file of files)form.append('files',file,file.name);response=await fetch('/api/v1/analyze',{method:'POST',body:form});}
- else{response=await fetch('/api/v1/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}
- const output=await response.json();if(!response.ok){throw new Error(response.status+' '+JSON.stringify(output.detail||output));}render(output);
- }catch(err){byId('toast').textContent='Validation request failed: '+err.message+' — If an API key is configured, use an authenticated server-side portal proxy; never embed the service key in this HTML.';}
- finally{btn.disabled=false;}
-});fillSample();
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const demoInbox = [
+    {id:'sample-1',from:'Operations Desk',to:'you@example.com',subject:'Shipment status and dispatch summary',body:'The latest package dispatch summary is ready for review.\nThis is a sample inbox item, not an actual email.',when:'09:24',sample:true},
+    {id:'sample-2',from:'Finance Team',to:'you@example.com',subject:'Invoice processing update',body:'October invoices have been processed.\nThis is example mailbox data.',when:'Yesterday',sample:true},
+    {id:'sample-3',from:'Project Team',to:'you@example.com',subject:'Review notes for the monthly release',body:'Please review the latest changes by Friday.\nThis is a sample message.',when:'Mon',sample:true}
+  ];
+  const state = { folder:'inbox', drafts:[], sent:[], activity:[], inbox:demoInbox, mailSelected:null, lastValidation:null, validatedSignature:null, pendingAction:null, busy:false, restricted:false, restrictedSnapshot:null, config:{sendPath:'',inboxPath:'',sentPath:''} };
+  const maxFiles=5, maxEach=3*1024*1024, maxTotal=10*1024*1024;
+  $('apiOrigin').value = ['http:','https:'].includes(location.protocol) ? location.origin : 'http://127.0.0.1:8000';
+
+  function apiOrigin(){
+    let url; try{url=new URL($('apiOrigin').value.trim())}catch(_){throw Error('Enter an API origin such as http://127.0.0.1:8000')}
+    if(!['http:','https:'].includes(url.protocol)||url.pathname!=='/'||url.search||url.hash||url.username||url.password)throw Error('API origin must contain only scheme, host and optional port.');
+    return url.origin;
+  }
+  function safePath(input){
+    const path=input.trim();
+    if(!path)return '';
+    if(!path.startsWith('/')||path.startsWith('//')||path.includes('\\')||/[?#]/.test(path))throw Error('Mail API paths must be relative to the OMG origin (example: /api/v1/send).');
+    if(path==='/api/v1/analyze')throw Error('The validation endpoint does not send emails. Configure an actual sending route.');
+    return path;
+  }
+  function headers(){const key=$('apiKey').value.trim();return key?{'X-OMG-API-Key':key}:{};}
+  function recipients(){return $('to').value.split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean);}
+  function attachedFiles(){return [...($('files').files||[])];}
+  function humanSize(n){return n>=1024*1024?(n/(1024*1024)).toFixed(1)+' MB':(n/1024).toFixed(0)+' KB';}
+  function getPayload(){
+    const subject=$('subject').value.trim(), body=$('body').value, html=$('html').value, to=recipients(), files=attachedFiles();
+    if(!subject)throw Error('Enter an email subject.');
+    if(!to.length)throw Error('Enter at least one recipient.');
+    if(to.some(t=>!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(t)))throw Error('Check the recipient email addresses.');
+    if(!body.trim()&&!html.trim())throw Error('Enter an email body or HTML content.');
+    if(files.length>maxFiles)throw Error('Maximum 5 attachments per email.');
+    if(files.some(f=>f.size>maxEach))throw Error('Each attachment must be 3 MiB or smaller.');
+    if(files.reduce((n,f)=>n+f.size,0)>maxTotal)throw Error('Total attachment size must be 10 MiB or smaller.');
+    return {subject,body,html,recipients:to,files};
+  }
+  function signature(p){return JSON.stringify([p.subject,p.body,p.html,p.recipients,p.files.map(f=>[f.name,f.size,f.lastModified,f.type])]);}
+  function formFor(p, extra){const form=new FormData();form.append('subject',p.subject);form.append('body',p.body);form.append('html',p.html);form.append('recipients',JSON.stringify(p.recipients));for(const f of p.files)form.append('files',f,f.name);if(extra)for(const [key,value] of Object.entries(extra)) if(value!==undefined&&value!==null)form.append(key,String(value));return form;}
+  function notice(msg,type){const el=$('notice');el.textContent=msg||'';el.className='notice'+(msg?' show':'')+(type?' '+type:'');}
+  // Delivery status is separate from OMG's SAFE / WARNING / RESTRICTED verdict.
+  // Only a positive confirmation from the server-side send endpoint can show SENT.
+  function deliveryStatus(kind, detail){
+    const labels={
+      idle:['EMAIL NOT SENT','—'],
+      validating:['VALIDATING EMAIL — NOT SENT','…'],
+      preview:['EMAIL NOT SENT — DEMO MODE','!'],
+      simulated:['EMAIL SENT — DEMO SIMULATION ONLY','✓'],
+      review:['EMAIL NOT SENT — REVIEW REQUIRED','!'],
+      blocked:['EMAIL NOT SENT — BLOCKED','×'],
+      failed:['EMAIL NOT SENT — FAILED','×'],
+      unknown:['SEND STATUS UNKNOWN','?'],
+      queued:['EMAIL QUEUED — NOT YET SENT','…'],
+      sent:['EMAIL SENT SUCCESSFULLY','✓']
+    };
+    const [title,symbol]=labels[kind]||labels.idle;
+    $('deliveryStatus').className='delivery-status '+(labels[kind]?kind:'idle');
+    $('deliveryTitle').textContent=title;
+    $('deliveryIcon').textContent=symbol;
+    $('deliveryDetail').textContent=detail||'No send request has been made.';
+  }
+  function setBusy(active,message){
+    state.busy=active;
+    $('busy').classList.toggle('show',active);
+    $('busyText').textContent=message||'Validating...';
+    // RESTRICTED must stay disabled after the validation request completes.
+    $('sendBtn').disabled=active || state.restricted;
+    ['saveDraft','newMail','clearCompose','checkApi'].forEach(id=>$(id).disabled=active);
+  }
+  async function call(path, init, timeoutMs=90000){
+    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+      const response=await fetch(apiOrigin()+path,{...init,signal:controller.signal,cache:'no-store'});
+      const raw=await response.text();let body;try{body=JSON.parse(raw)}catch(_){body={detail:raw.slice(0,1000)||'Empty response'}};
+      if(!response.ok)throw Error('HTTP '+response.status+': '+(typeof body.detail==='string'?body.detail:JSON.stringify(body.detail||body)));
+      return body;
+    }catch(error){if(error.name==='AbortError')throw Error('Request timed out.');if(error instanceof TypeError)throw Error('Cannot reach backend. Check the API origin, server, HTTPS/CORS and network.');throw error}
+    finally{clearTimeout(timeout)}
+  }
+  function findURLs(){
+    const sources=[$('subject').value,$('body').value,$('html').value];
+    const urls=[];const re=/\b(?:https?:\/\/|www\.)[^\s<>"'`]+/gi;
+    for(const text of sources){for(const value of text.matchAll(re)){const u=value[0].replace(/[),.;!?]+$/,'');if(u&&!urls.includes(u))urls.push(u)}}
+    for(const value of $('html').value.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {const u=value[1];if(/^https?:\/\//i.test(u)&&!urls.includes(u))urls.push(u)}
+    return urls;
+  }
+  function renderURLs(){const vals=findURLs();$('urlCount').textContent=vals.length+' detected';const list=$('urlList');list.replaceChildren();if(!vals.length){const el=document.createElement('span');el.className='hint';el.textContent='No URLs present';list.append(el)}else for(const val of vals){const chip=document.createElement('span');chip.className='urlchip';chip.textContent=val;list.append(chip)}}
+  function renderFiles(){const holder=$('fileList');holder.replaceChildren();attachedFiles().forEach((file,index)=>{const chip=document.createElement('span');chip.className='filetag';chip.append(document.createTextNode(file.name+' · '+humanSize(file.size)));const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove '+file.name;remove.setAttribute('aria-label','Remove '+file.name);remove.addEventListener('click',()=>{const dt=new DataTransfer();attachedFiles().forEach((f,i)=>{if(i!==index)dt.items.add(f)});$('files').files=dt.files;renderFiles();resetResult()});chip.append(remove);holder.append(chip)})}
+  function mark(tag,value){const el=$(tag);el.textContent=value||'Not checked';el.style.color=value==='RESTRICTED'?'#b93445':value==='WARNING'?'#a36615':value==='SAFE'?'#087758':''}
+  function score(s){return typeof s==='number'&&Number.isFinite(s)?s.toFixed(1)+' / 100 (policy index)':'—'}
+  function overallScore(s){return typeof s==='number'&&Number.isFinite(s)?s.toFixed(1)+' / 100':'—'}
+  function overallDetail(status){return status==='SAFE'?'Policy index · SAFE range 85-100':status==='WARNING'?'Policy index · WARNING range 75-84.9':status==='RESTRICTED'?'Policy index · RESTRICTED range 0-74.9':'Awaiting validation'}
+  // Snapshot the current compose fields so clicking Close cannot unlock a RESTRICTED draft.
+  function draftFingerprint(){
+    return JSON.stringify([$('to').value,$('subject').value,$('body').value,$('html').value,
+      attachedFiles().map(f=>[f.name,f.size,f.lastModified,f.type])]);
+  }
+  function resetResult(){
+    state.restricted=false;
+    state.restrictedSnapshot=null;
+    state.pendingAction=null;
+    $('sendBtn').disabled=state.busy;
+    $('sendBtn').title='';
+    state.lastValidation=null;state.validatedSignature=null;$('verdict').className='verdict';$('verdict').textContent='NOT CHECKED';$('resultMessage').textContent='Your email will be checked automatically when you click Send.';$('overallScoreValue').textContent='—';$('overallScoreDetail').textContent='Not checked';$('overallBand').className='verdict';$('overallBand').textContent='NOT CHECKED';for(const id of ['textStatus','urlStatus','attachmentStatus'])mark(id,'Not checked');for(const id of ['textScore','urlScore','attachmentScore'])$(id).textContent='—';$('findingList').replaceChildren();$('rawJson').textContent='Not checked';$('scannerWarning').classList.add('hidden');notice('');deliveryStatus('idle','No send request has been made.');}
+  function showResult(data){
+    const stat=data.status||'ERROR';$('verdict').textContent=stat;$('verdict').className='verdict '+stat;
+    const overall=data.confidence_score;
+    $('overallScoreValue').textContent=overallScore(overall);$('overallBand').textContent=stat;$('overallBand').className='verdict '+stat;
+    $('overallScoreDetail').textContent=overallDetail(stat)+(typeof overall==='number'?' · aggregated from all modules':'');
+    $('resultMessage').textContent=stat==='SAFE'?'No configured rule flagged this message. In demo mode a send is simulated, not delivered.':stat==='WARNING'?'Potential issues detected. Review and acknowledge before requesting a send.':'Security policy has blocked sending.';
+    const modules=[['text',data.text,'textStatus','textScore'],['URL',data.URL,'urlStatus','urlScore'],['attachments',data.attachments,'attachmentStatus','attachmentScore']];
+    for(const [key,value,statusId,scoreId] of modules){if(value==='empty'||value===undefined||value===null){mark(statusId,'EMPTY');$(scoreId).textContent='Not supplied';continue}
+      if(Array.isArray(value)){const statuses=value.map(v=>v.status);mark(statusId,statuses.includes('RESTRICTED')?'RESTRICTED':statuses.includes('WARNING')?'WARNING':statuses.every(x=>x==='SAFE')?'SAFE':'RESULT');const vals=value.map(v=>v.confidence_score).filter(x=>typeof x==='number');$(scoreId).textContent=vals.length?score(Math.min(...vals)):'—';continue}
+      mark(statusId,value.status||'RESULT');$(scoreId).textContent=score(value.confidence_score)}
+    const items=[];
+    for(const source of ['text','URL']) {const obj=data[source];if(obj&&typeof obj==='object'&&!Array.isArray(obj))for(const x of obj.issues||[])items.push({source,code:x.code,reason:x.reason||x.message})}
+    if(Array.isArray(data.attachments))for(const a of data.attachments)for(const x of a.issues||[])items.push({source:a.filename||'attachment',code:x.code,reason:x.reason||x.message});
+    if(!items.length&&data.popup&&Array.isArray(data.popup.reasons))for(const x of data.popup.reasons)items.push({source:'policy',reason:typeof x==='string'?x:JSON.stringify(x)});
+    $('findingList').replaceChildren();for(const x of items.slice(0,25)){const li=document.createElement('li');li.textContent=(x.source?x.source+' · ':'')+(x.code?x.code+': ':'')+(x.reason||'Security finding');$('findingList').append(li)}
+    $('scannerWarning').classList.toggle('hidden',!Array.isArray(data.warnings)||!data.warnings.length);$('scannerWarning').textContent=(data.warnings||[]).join(' · ');
+    $('rawJson').textContent=JSON.stringify(data,null,2);
+  }
+  function noteActivity(type,p,data,msg){state.activity.unshift({id:'a'+Date.now(),from:type,to:p.recipients.join(', '),subject:p.subject,body:msg||('Validation status: '+(data&&data.status||'UNKNOWN')),when:new Date().toLocaleTimeString(),sample:false});updateCounts();if(state.folder==='activity')renderFolder()}
+  async function analyze(p){
+    const useFiles=p.files.length>0;
+    const init=useFiles?{method:'POST',headers:headers(),body:formFor(p)}:{method:'POST',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify({subject:p.subject,body:p.body,html:p.html,recipients:p.recipients,attachments:[]})};
+    const data=await call('/api/v1/analyze',init);
+    if(!['SAFE','WARNING','RESTRICTED'].includes(data.status))throw Error('Unexpected response: missing valid OMG security decision.');
+    state.lastValidation=data;state.validatedSignature=signature(p);showResult(data);return data;
+  }
+  function openVerdict(data){
+    $('verdictOverlay').classList.add('show');$('popupTitle').textContent=(data.popup&&data.popup.title)||(data.status==='WARNING'?'Email Warning':'Email Restricted');$('popupState').textContent=data.status;$('popupState').className='verdict '+data.status;
+    $('popupMessage').textContent=(data.popup&&data.popup.message)||(data.status==='WARNING'?'Review this email before requesting delivery.':'Sending is blocked by security policy.');
+    const ul=$('popupReasons');ul.replaceChildren();const reasons=(data.popup&&data.popup.reasons)||[];
+    for(const reason of reasons){const li=document.createElement('li');li.textContent=typeof reason==='string'?reason:reason.reason||reason.message||JSON.stringify(reason);ul.append(li)}
+    $('ack').checked=false;
+    $('ackRow').classList.toggle('hidden',data.status!=='WARNING');
+    $('ackLabel').textContent=state.config.sendPath?'I reviewed the warnings and request server-side acknowledgment before sending.':'I reviewed the warnings. Continue with a simulated demo send (no real email delivery).';
+    $('editMail').classList.toggle('hidden',data.status==='RESTRICTED');
+    $('popupAction').textContent=data.status==='RESTRICTED'?'Close':(state.config.sendPath?'Acknowledge & request send':'Acknowledge & send (demo)');
+    $('popupAction').className='btn '+(data.status==='RESTRICTED'?'':'primary');
+    $('popupAction').disabled=data.status==='WARNING';
+  }
+  function closeVerdict(){$('verdictOverlay').classList.remove('show');$('editMail').classList.remove('hidden')}
+  function simulateSend(p,data,ack){
+    // Browser-only simulation. NEVER claim any email has been accepted by a mail provider.
+    // Only validated SAFE, or validated WARNING with an explicit acknowledgment, is eligible.
+    if(!['SAFE','WARNING'].includes(data.status) ||
+       (data.status==='SAFE' && data.can_send!==true) ||
+       (data.status==='WARNING' && !ack) ||
+       state.validatedSignature!==signature(p)){
+      deliveryStatus('blocked','Demo send blocked: the current message is not authorized for simulation.');
+      return;
+    }
+    const item={id:'demo'+Date.now(),from:'Me · DEMO',to:p.recipients.join(', '),
+      subject:p.subject,body:p.body,html:p.html,
+      when:new Date().toLocaleTimeString(),sample:false,simulated:true};
+    state.sent.unshift(item);
+    noteActivity('DEMO SEND (NOT DELIVERED)',p,data,
+      'Simulation only. '+data.status+(ack?' with acknowledgment':'')+'. No email was delivered.');
+    updateCounts();
+    if(state.folder==='sent')renderFolder();
+    deliveryStatus('simulated','Validation: '+data.status+(ack?' (warning acknowledged)':'')+'. Added to the demo Sent folder. No actual email was delivered to '+p.recipients.join(', ')+'.');
+    notice('Demo send completed. This is a visual simulation; the recipient did not receive an email.','good');
+  }
+  async function deliver(p,data,ack){
+    if(!state.config.sendPath){
+      simulateSend(p,data,ack);
+      return;
+    }
+    deliveryStatus('validating','Validation passed. Requesting a send through your configured mail backend.');
+    setBusy(true,'Requesting delivery from the mail backend...');
+    try{
+      // The backend must independently revalidate exact content/files and verify warning acknowledgement.
+      const extra=ack?{warning_acknowledged:'true',warning_challenge:data.warning_challenge||''}:{};
+      const result=await call(state.config.sendPath,{method:'POST',headers:headers(),body:formFor(p,extra)},120000);
+      // HTTP 200 and OMG SAFE alone do not mean sent. Confirm a documented delivery result.
+      if(result.sent===true){
+        const item={id:'s'+Date.now(),from:'Me',to:p.recipients.join(', '),subject:p.subject,body:p.body,when:new Date().toLocaleTimeString(),sample:false};
+        state.sent.unshift(item);
+        noteActivity('MAIL SENT',p,data,JSON.stringify({message_id:result.message_id||null,status:'Sent (reported by mail backend)'}));
+        updateCounts();
+        deliveryStatus('sent','Mail backend confirmed sent'+(result.message_id?' (message ID: '+result.message_id+')':'')+'. This does not prove recipient inbox delivery.');
+        notice('');
+        if(state.folder==='sent')renderFolder();
+      } else if(result.queued===true || result.accepted===true){
+        noteActivity('MAIL QUEUED',p,data,JSON.stringify({message_id:result.message_id||null,status:'Queued / accepted, not confirmed sent'}));
+        deliveryStatus('queued','Mail backend accepted or queued this message, but has not confirmed sending. Check your server queue or delivery logs.');
+        notice('');
+      } else {
+        // May have reached the backend; do not wrongly declare that it definitely was not sent.
+        deliveryStatus('unknown','The delivery backend did not confirm a send. Check server logs before retrying.');
+        notice('Backend response did not contain sent:true, queued:true, or accepted:true.','fail');
+        noteActivity('SEND UNCONFIRMED',p,data,'Delivery backend did not return a recognized delivery confirmation.');
+      }
+    }catch(err){
+      deliveryStatus('unknown','The send request failed or its result was not confirmed. Check the mail backend before retrying.');
+      notice('Send not confirmed: '+err.message,'fail');
+      noteActivity('SEND UNCONFIRMED',p,data,err.message);
+    }finally{setBusy(false)}
+  }
+  async function onSend(){
+    // The button is disabled as well, but guard against programmatic invocation.
+    if(state.busy || state.restricted)return;
+    notice('');let p;
+    try{p=getPayload();apiOrigin()}catch(err){deliveryStatus('failed','No send request made: '+err.message);notice(err.message,'fail');return}
+    deliveryStatus('validating','Checking subject, body, URLs, and attachments before any delivery.');
+    setBusy(true,'Checking subject, body, URLs, and attachments...');let data;
+    try{data=await analyze(p);noteActivity('OMG '+data.status,p,data)}
+    catch(err){
+      resetResult();
+      deliveryStatus('failed','OMG validation failed. The message was not submitted for sending.');
+      notice('Email was not sent. Validation failed: '+err.message,'fail');return;
+    }finally{setBusy(false)}
+    // If the composer changed during the API call, the result is stale.
+    // Never treat a verdict for previous content as permission to send the new content.
+    try{
+      if(signature(getPayload())!==signature(p)){
+        resetResult();
+        deliveryStatus('review','Message changed during validation. Nothing was sent. Click Send again to validate the updated email.');
+        notice('Email changed during inspection. Please submit it for a fresh OMG check.','fail');
+        return;
+      }
+    }catch(_){
+      resetResult();
+      deliveryStatus('failed','Message changed during validation. Nothing was sent.');
+      notice('Correct the email fields and click Send to validate again.','fail');
+      return;
+    }
+    if(data.status==='RESTRICTED'){
+      state.restricted=true;
+      state.restrictedSnapshot=draftFingerprint();
+      $('sendBtn').disabled=true;
+      $('sendBtn').title='Blocked by OMG: modify the email to run another validation.';
+      deliveryStatus('blocked','EMAIL NOT SENT — RESTRICTED. Send Email is disabled. Close this popup, correct the message, and revalidate.');
+      state.pendingAction={snapshot:signature(p),data};
+      openVerdict(data);
+      return;
+    }
+    if(data.status==='WARNING'){
+      deliveryStatus('review','OMG classified this message WARNING. No send has been requested; acknowledgment is required.');
+      state.pendingAction={snapshot:signature(p),data};openVerdict(data);return;
+    }
+    if(data.status==='SAFE'&&data.can_send===true){await deliver(p,data,false);return}
+    deliveryStatus('blocked','OMG did not authorize a send.');
+    notice('Sending blocked: backend did not grant send permission.','fail');
+  }
+  function clearCompose(){if(state.busy)return;$('to').value='';$('subject').value='';$('body').value='';$('html').value='';$('files').value='';renderURLs();renderFiles();resetResult();}
+  function loadCompose(message){$('to').value=message.to||'';$('subject').value=message.subject||'';$('body').value=message.body||'';$('html').value=message.html||'';$('files').value='';renderURLs();renderFiles();resetResult();$('subject').focus();}
+  function saveDraft(){try{const p=getPayload();state.drafts.unshift({id:'d'+Date.now(),from:'Me',to:p.recipients.join(', '),subject:p.subject,body:p.body,html:p.html,when:new Date().toLocaleTimeString(),sample:false});updateCounts();notice('Draft saved in this browser tab (not uploaded or persisted). Attachments are not saved.','good');if(state.folder==='drafts')renderFolder()}catch(err){notice(err.message,'fail')}}
+  function updateCounts(){$('sentCount').textContent=state.sent.length;$('draftCount').textContent=state.drafts.length;$('inboxCount').textContent=state.inbox.length}
+  function itemsForFolder(){return state.folder==='inbox'?state.inbox:state.folder==='sent'?state.sent:state.folder==='drafts'?state.drafts:state.activity}
+  function renderFolder(){
+    const titles={inbox:'Inbox',sent:'Sent',drafts:'Drafts',activity:'Validation log'};const subtitles={inbox:state.config.inboxPath?'Connected mailbox API':'Example mailbox · not synchronized with an email provider',sent:state.config.sentPath?'Connected sent-mail API':(state.config.sendPath?'Messages confirmed by the configured mail backend':'DEMO Sent · simulated messages only; no actual delivery'),drafts:'Drafts kept in this tab only · attachments are not retained',activity:'Local session log · not a delivery audit trail'};
+    $('folderTitle').textContent=titles[state.folder];$('folderSub').textContent=subtitles[state.folder];$('listTitle').textContent=titles[state.folder];$('listKind').textContent=state.folder==='inbox'&&!state.config.inboxPath?'SAMPLE MAIL':state.folder==='activity'?'SESSION ONLY':'MAIL ITEMS';
+    document.querySelectorAll('.navitem').forEach(button=>button.classList.toggle('active',button.dataset.folder===state.folder));
+    const term=$('mailSearch').value.toLowerCase().trim();const entries=itemsForFolder().filter(x=>(x.subject+' '+x.from+' '+x.body).toLowerCase().includes(term));const holder=$('messages');holder.replaceChildren();$('reader').classList.remove('show');
+    if(!entries.length){const empty=document.createElement('div');empty.className='emptybox';const strong=document.createElement('strong');strong.textContent='No messages to display';empty.append(strong,document.createTextNode(state.folder==='inbox'?'Check your Inbox API settings or search again.':'This folder is empty in the current session.'));holder.append(empty);return}
+    for(const mail of entries){const button=document.createElement('button');button.className='mailitem';button.type='button';const avatar=document.createElement('span');avatar.className='avatar';avatar.textContent=(mail.from||'?').slice(0,1).toUpperCase();const wrapper=document.createElement('span');wrapper.style.minWidth='0';const header=document.createElement('span');header.className='mailhead';const sender=document.createElement('strong');sender.textContent=mail.from||'Unknown';const time=document.createElement('time');time.textContent=mail.when||'';header.append(sender,time);const subj=document.createElement('span');subj.className='mailsub';subj.style.display='block';subj.textContent=mail.subject||'(No subject)';const preview=document.createElement('span');preview.className='mailpreview';preview.style.display='block';preview.textContent=(mail.simulated?'[DEMO · NOT DELIVERED] ':(mail.sample?'[SAMPLE] ':''))+(mail.body||'').replace(/\n/g,' ');wrapper.append(header,subj,preview);button.append(avatar,wrapper);
+      button.addEventListener('click',()=>{holder.querySelectorAll('.mailitem').forEach(x=>x.classList.remove('selected'));button.classList.add('selected');$('readerSubject').textContent=mail.subject||'(No subject)';$('readerMeta').textContent=(mail.simulated?'DEMO SIMULATION · NOT DELIVERED · ':(mail.sample?'SAMPLE · ':''))+'From: '+(mail.from||'Unknown')+' · To: '+(mail.to||'—');$('readerBody').textContent=mail.body||'';$('reader').classList.add('show');if(state.folder==='drafts')loadCompose(mail)});holder.append(button)}
+  }
+  function normalizeMail(raw){const items=Array.isArray(raw)?raw:Array.isArray(raw.messages)?raw.messages:null;if(!items)throw Error('Mailbox response must be an array or {"messages": [...]}.');return items.slice(0,200).map((m,i)=>({id:String(m.id||i),from:String(m.from||m.sender||'Unknown'),to:String(m.to||''),subject:String(m.subject||'(No subject)'),body:String(m.body||m.preview||''),when:String(m.when||m.date||''),sample:false}))}
+  async function refreshMailbox(){const route=state.folder==='inbox'?state.config.inboxPath:state.folder==='sent'?state.config.sentPath:'';if(!route)return;try{const data=await call(route,{method:'GET',headers:headers()});const list=normalizeMail(data);if(state.folder==='inbox')state.inbox=list;else state.sent=list;updateCounts();renderFolder()}catch(err){notice('Mailbox loading failed: '+err.message,'fail')}}
+  function openSettings(){$('settingsOverlay').classList.add('show')}
+  function closeSettings(){$('settingsOverlay').classList.remove('show')}
+  function applySettings(){try{apiOrigin();const sendPath=safePath($('sendPath').value),inboxPath=safePath($('inboxPath').value),sentPath=safePath($('sentPath').value);state.config={sendPath,inboxPath,sentPath};$('modeTag').textContent=sendPath?'GATEWAY CONFIGURED':'DEMO SEND MODE';closeSettings();renderFolder();notice(sendPath?'Mail gateway configured. The server must revalidate and enforce policy before actual sending.':'Demo send mode: SAFE emails simulate sending; WARNING emails require acknowledgment; RESTRICTED emails cannot be sent. No real delivery occurs.','good');if(state.folder==='inbox'||state.folder==='sent')refreshMailbox()}catch(err){window.alert(err.message)}}
+  async function checkApi(){try{const schema=await call('/openapi.json',{method:'GET'});const ok=!!(schema.paths&&schema.paths['/api/v1/analyze']&&schema.paths['/api/v1/analyze'].post);$('connection').textContent=ok?'OMG API available':'API route not found';$('connection').className='connection '+(ok?'online':'offline');if(!ok)notice('The server responded but /api/v1/analyze is missing. Check your OMG version.','fail')}catch(err){$('connection').textContent='API unavailable';$('connection').className='connection offline';notice(err.message,'fail')}}
+
+  function composeChanged(){
+    renderURLs();
+    // If the user has not actually changed the RESTRICTED draft, keep Send disabled.
+    if(state.restricted && draftFingerprint()===state.restrictedSnapshot)return;
+    resetResult();
+    if($('deliveryTitle').textContent==='EMAIL NOT SENT'){
+      deliveryStatus('idle','The message has changed. Click Send email for a fresh security validation.');
+    }
+  }
+  for(const id of ['to','subject','body','html'])$(id).addEventListener('input',composeChanged);
+  $('files').addEventListener('change',()=>{renderFiles();composeChanged()});
+  $('sendBtn').addEventListener('click',onSend);
+  $('saveDraft').addEventListener('click',saveDraft);
+  $('clearCompose').addEventListener('click',clearCompose);
+  $('newMail').addEventListener('click',()=>{clearCompose();$('composePanel').scrollIntoView({behavior:'smooth',block:'start'});$('to').focus()});
+  $('checkApi').addEventListener('click',checkApi);
+  $('settingsBtn').addEventListener('click',openSettings);
+  $('closeSettings').addEventListener('click',closeSettings);
+  $('applySettings').addEventListener('click',applySettings);
+  $('mailSearch').addEventListener('input',renderFolder);
+  document.querySelectorAll('.navitem').forEach(btn=>btn.addEventListener('click',()=>{state.folder=btn.dataset.folder;$('mailSearch').value='';renderFolder();refreshMailbox();$('mailboxPanel').scrollIntoView({behavior:'smooth',block:'start'})}));
+  $('editMail').addEventListener('click',closeVerdict);
+  $('ack').addEventListener('change',()=>{$('popupAction').disabled=!$('ack').checked});
+  $('popupAction').addEventListener('click',async()=>{
+    const data=state.pendingAction&&state.pendingAction.data;closeVerdict();if(!data)return;
+    if(data.status==='RESTRICTED'){
+      // Close only: do NOT erase the draft or clear its RESTRICTED lock.
+      state.pendingAction=null;
+      state.restricted=true;
+      $('sendBtn').disabled=true;
+      $('sendBtn').title='Blocked by OMG: modify the email to run another validation.';
+      deliveryStatus('blocked','EMAIL NOT SENT — RESTRICTED. Send Email is disabled until the draft changes and is revalidated.');
+      notice('Popup closed. Your draft is preserved; sending remains blocked. Edit the message to validate again.','fail');
+      return;
+    }
+    if(!$('ack').checked){deliveryStatus('review','Warning acknowledgment was not completed. Nothing was sent.');notice('Warning acknowledgment was not completed. Nothing was sent.','fail');return}
+    try{const p=getPayload();if(signature(p)!==state.pendingAction.snapshot){resetResult();deliveryStatus('review','Message changed after inspection. Click Send again to revalidate.');notice('Message changed after inspection. Click Send again to revalidate.','fail');return}await deliver(p,data,true)}catch(err){deliveryStatus('failed','Could not prepare the message for sending.');notice(err.message,'fail')}
+  });
+  $('settingsOverlay').addEventListener('click',e=>{if(e.target===$('settingsOverlay'))closeSettings()});
+  $('verdictOverlay').addEventListener('click',e=>{if(e.target===$('verdictOverlay'))closeVerdict()});
+  renderURLs();renderFiles();renderFolder();updateCounts();
 })();
 </script>
 </body>

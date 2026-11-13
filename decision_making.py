@@ -1,254 +1,651 @@
-"""Unified deterministic policy decision and three-contribution safety score.
+"""Hybrid decision engine for Outbound Mail Gatekeeper.
 
-Each module starts with an EXACT 100/3 policy-credit contribution. Risk evidence
-subtracts deterministic points in that module. Status comes from findings and
-mandatory inspection results, never from an average that can hide a CRITICAL
-issue. A documented enforcement deduction, applied to the risk-bearing module,
-keeps the numeric score inside the final policy band. This is NOT a calibrated
-probability of safety, and does not certify any URL or attachment malware-free.
+Exactly one verdict implementation lives here. Validator reports are adapted
+into the common :class:`pattern_scoring.ModuleResult` shape, then evaluated by
+a fixed precedence:
+
+1. any mandatory inspection incomplete  -> RESTRICTED
+2. any confirmed HIGH/CRITICAL finding  -> RESTRICTED
+3. investigation UNRESOLVED             -> RESTRICTED
+4. lowest module below 75 (not CLEARED) -> RESTRICTED
+5. investigation PENDING                -> WARNING
+6. lowest module below 85               -> WARNING (investigation required)
+7. otherwise                            -> weighted policy score
 """
-from __future__ import annotations
-from typing import Any
 
-from score_policy import score_band
+from math import isfinite
 
-MODULE_CAP = 100.0 / 3.0
-INSPECTION_FAILURE_SUFFIXES = ("_FAILED", "_UNAVAILABLE", "_ERROR", "_INCOMPLETE", "_FAILURE")
-WARNING_ELIGIBLE_CODES = frozenset({
-    "SHORTENED_URL", "POTENTIAL_PAYMENT_REDIRECTION", "POTENTIAL_ACCOUNT_VERIFICATION_LURE",
-    "INSECURE_LOGIN_URL", "SENSITIVE_FINANCIAL_CHANGE", "ACCOUNT_UPDATE_LINK_REVIEW",
-    "PAYMENT_UPDATE_LINK_REVIEW", "PAYMENT_CHANGE_LINK_REVIEW", "VENDOR_PAYMENT_CHANGE_REVIEW",
-    "LOOKALIKE_TRUSTED_DOMAIN",
-})
-SEVERITY_ORDER = {"INFO": 0, "LOW": 1, "MINOR": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
-BASE_PENALTIES = {"INFO": 1.5, "LOW": 14.25, "MINOR": 15.5, "MEDIUM": 20.0,
-                  "HIGH": 26.0, "CRITICAL": 30.0}
-EXTRA_PENALTIES = {
-    "VENDOR_PAYMENT_DIVERSION": 1.4,
-    "CREDENTIAL_COLLECTION_REQUEST": 1.2,
-    "CREDENTIAL_PHISHING": 1.0,
-    "PAYMENT_APPROVAL_BYPASS_LINK": 1.1,
-    "SHORTENED_URL": 0.8,
-    "PAYMENT_CHANGE_LINK_REVIEW": 1.2,
-    "INSECURE_LOGIN_URL": 1.5,
-    "SENSITIVE_FINANCIAL_CHANGE": -0.9,
+from score_policy import (
+    MODULE_WEIGHTS,
+    SAFE_THRESHOLD,
+    WARNING_THRESHOLD,
+    INVESTIGATION_THRESHOLD,
+    DEEP_INVESTIGATION_THRESHOLD,
+    POLICY_RESTRICTED_RISK,
+    POLICY_WARNING_RISK,
+    MAX_CONTEXT_PENALTY,
+    OVERALL_CORROBORATION_FACTOR,
+    OVERALL_EXTRA_MODULE_RISK,
+    BLOCKING_SEVERITIES,
+    VALID_SEVERITIES,
+    Verdict,
+    InvestigationStatus,
+    clamp_to_status,
+    project_overall_score,
+    project_safety_score,
+)
+from pattern_scoring import (
+    Finding as ScoringFinding,
+    ModuleResult,
+    calculate_risk_points,
+    module_to_dict,
+)
+HARD_BLOCK_CODES = {
+    "DEATH_THREAT",
+    "THREATENING_EXTORTION",
+    "VIOLENT_THREAT",
+    "PHYSICAL_HARM_THREAT",
+    "PHYSICAL_HARM_INTIMIDATION",
+}
+
+REQUIRED_MODULES = {"content", "url", "attachments"}
+MODULE_ORDER = {name: index for index, name in enumerate(MODULE_WEIGHTS)}
+MODULE_LABEL = {
+    "content": "CONTENT",
+    "url": "URL",
+    "attachments": "ATTACHMENTS",
+}
+
+_FAILURE_CODE_SUFFIXES = (
+    "_FAILED", "_UNAVAILABLE", "_ERROR", "_INCOMPLETE", "_FAILURE", "_SCAN_INCOMPLETE",
+)
+_INCOMPLETE_COVERAGE_STATES = {
+    "failed", "incomplete", "required_unavailable", "unavailable",
+    "partial", "timeout", "error", "skipped",
 }
 
 
-def _finding(item: dict, source: str, filename: str | None = None, warning: bool = False) -> dict:
-    code = str(item.get("code") or "UNKNOWN_FINDING")
-    category = str(item.get("category") or ("ATTACHMENT" if source == "attachments" else source.upper()))
-    explicit = str(item.get("severity") or "").upper()
-    if category == "INSPECTION_FAILURE" or code.endswith(INSPECTION_FAILURE_SUFFIXES):
-        severity = "CRITICAL"
-    elif explicit in SEVERITY_ORDER:
-        severity = explicit
-    elif warning or code in WARNING_ELIGIBLE_CODES:
-        severity = "MINOR"
-    else:
-        severity = "HIGH"  # conservative for unclassified existing detector findings
-    finding = {"code": code, "category": category, "severity": severity,
-               "message": str(item.get("message") or item.get("reason") or "Security review required"),
-               "source": source}
-    if filename is not None:
-        finding["filename"] = filename
-    return finding
+def _is_inspection_failure(item):
+    category = str(item.get("category", "")).upper()
+    code = str(item.get("code", "")).upper()
+    return category == "INSPECTION_FAILURE" or code.endswith(_FAILURE_CODE_SUFFIXES)
 
 
-def _dedupe(findings: list[dict]) -> list[dict]:
-    deduped = {}
-    for f in findings:
-        k = (f.get("source"), f.get("filename"), f["code"], f["message"])
-        if k not in deduped:
-            deduped[k] = f
-    return list(deduped.values())
+def _report_findings(report):
+    """Return finding dictionaries from one validator report."""
+    findings = report.get("findings", [])
+    if not isinstance(findings, list):
+        return []
 
+    normalized = [item for item in findings if isinstance(item, dict)]
 
-def _module_status(findings: list[dict]) -> str:
-    if any(f["severity"] in {"CRITICAL", "HIGH"} for f in findings):
-        return "RESTRICTED"
-    if any(f["severity"] in {"LOW", "MINOR", "MEDIUM"} for f in findings):
-        return "WARNING"
-    return "SAFE"
-
-
-def _failed_inspection(findings: list[dict]) -> bool:
-    return any(f["category"] == "INSPECTION_FAILURE" or f["code"].endswith(INSPECTION_FAILURE_SUFFIXES)
-               for f in findings)
-
-
-def _module_contribution(findings: list[dict], *, inspection_failed: bool = False) -> float:
-    """Risk score uses most severe signal plus bounded independent corroboration.
-
-    Repetitions of the same detection code don't amplify the risk; distinct
-    signals do, without double-counting a long message as multiple incidents.
-    """
-    if inspection_failed:
-        return 0.0  # No policy safety credit without mandatory inspection.
-    by_code: dict[str, float] = {}
-    for finding in findings:
-        # if finding["severity"] == "INFO":
-        #     continue
-        code = finding["code"]
-        impact = BASE_PENALTIES[finding["severity"]] + EXTRA_PENALTIES.get(code, 0.0)
-        by_code[code] = max(by_code.get(code, 0), impact)
-    if not by_code:
-        return MODULE_CAP
-    ranking = sorted(by_code.values(), reverse=True)
-    # A dominant threat carries the majority of the loss. Supporting distinct
-    # findings add incremental penalty at diminishing rates.
-    penalty = ranking[0] + sum(value * (0.12 / i) for i, value in enumerate(ranking[1:], 1))
-    return max(0.0, MODULE_CAP - min(MODULE_CAP, penalty))
-
-
-def _combined_scores(
-    c: list[dict], u: list[dict], a: list[dict], status: str,
-    *, attachment_failure: bool = False,
-) -> tuple[float, dict[str, float]]:
-    raw = [
-        _module_contribution(c, inspection_failed=_failed_inspection(c)),
-        _module_contribution(u, inspection_failed=_failed_inspection(u)),
-        _module_contribution(a, inspection_failed=attachment_failure or _failed_inspection(a)),
-    ]
-    raw_total = sum(raw)
-    # Status always wins. In uncommon cases (e.g. one HIGH rule with little
-    # corroboration), apply a transparent policy-enforcement deduction to the
-    # implicated module so score and status cannot contradict each other.
-    if status == "RESTRICTED" and raw_total >= 75:
-        excess = raw_total - 74.5
-    elif status == "WARNING" and raw_total >= 86:
-        excess = raw_total - 85.5
-    elif status == "SAFE" and raw_total < 86:
-        raise ValueError("SAFE verdict cannot have a low policy safety score")
-    else:
-        excess = 0.0
-    if status == "WARNING" and raw_total < 75:
-        # Multiple independent review-only signals are still WARNING, not
-        # proven high-risk enforcement findings. The policy review band
-        # saturates rather than accidentally labelling them RESTRICTED.
-        deficit = 75.25 - raw_total
-        buckets = (c, u, a)
-        for index in range(3):
-            if _module_status(buckets[index]) == "SAFE":
+    attachments = report.get("attachments", [])
+    if isinstance(attachments, list):
+        for attachment in attachments:
+            if not isinstance(attachment, dict):
                 continue
-            credit = min(MODULE_CAP - raw[index], deficit)
-            raw[index] += credit
-            deficit -= credit
-            if deficit <= 1e-9:
-                break
-    if excess:
-        buckets = (c, u, a)
-        offending = [i for i, bucket in enumerate(buckets) if _module_status(bucket) != "SAFE"]
-        # Attachment-only reported restriction may have no per-file details.
-        if not offending:
-            offending = [2]
-        for index in offending:
-            deduction = min(raw[index], excess)
-            raw[index] -= deduction
-            excess -= deduction
-            if excess <= 1e-9:
-                break
-    # Four-decimal JSON must reconcile to the exact total. Assign residual
-    # only to a module that actually earned positive credit. The all-clean
-    # 33.3333/33.3333/33.3334 display is a 0.0001 rounding artifact.
-    total = round(sum(raw), 4)
-    rounded = [round(x, 4) for x in raw]
-    residual = round(total - sum(rounded), 4)
-    if abs(residual) > 0:
-        positive = [i for i, value in enumerate(raw) if value > 0]
-        if positive:
-            index = max(positive, key=lambda i: (raw[i], i))
-            rounded[index] = round(rounded[index] + residual, 4)
-    contributions = dict(zip(("text", "URL", "attachments"), rounded))
-    if score_band(total) != status:
-        raise AssertionError(f"Policy-score mismatch: {status} / {total}")
-    return total, contributions
+            for key in ("findings", "advisories"):
+                items = attachment.get(key, [])
+                if isinstance(items, list):
+                    normalized.extend(
+                        {**item, "filename": attachment.get("filename")}
+                        for item in items
+                        if isinstance(item, dict)
+                    )
+    return normalized
 
 
-def decide_email(content: dict, urls: dict, attachments: dict | None = None) -> dict[str, Any]:
-    """Merge independent module findings without weakening the scanner decisions."""
-    c = [_finding(x, "content") for x in content.get("findings", [])]
-    u = [_finding(x, "urls") for x in urls.get("findings", [])]
-    for source, report, bucket in (("CONTENT", content, c), ("URL", urls, u)):
-        declared = report.get("status")
-        if declared in {"WARNING", "RESTRICTED"} and not bucket:
-            bucket.append(_finding({
-                "code": source + ("_REVIEW_REQUIRED" if declared == "WARNING" else "_INSPECTION_INCOMPLETE"),
-                "category": "REVIEW" if declared == "WARNING" else "INSPECTION_FAILURE",
-                "severity": "MINOR" if declared == "WARNING" else "CRITICAL",
-                "message": f"{source} validator declared {declared} without details.",
-            }, "content" if source == "CONTENT" else "urls"))
-    a: list[dict] = []
-    report = attachments
-    if report is not None:
-        a.extend(_finding(f, "attachments") for f in report.get("findings", []))
-        for item in report.get("attachments", []):
-            name = str(item.get("filename") or "(unnamed)")
-            a.extend(_finding(f, "attachments", name) for f in item.get("findings", []))
-            a.extend(_finding(f, "attachments", name, warning=True) for f in item.get("advisories", []))
-        if report.get("status") in {"RESTRICTED", "WARNING"} and not a:
-            reasons = (report.get("popup") or {}).get("reasons") or []
-            for reason in reasons:
-                if isinstance(reason, dict):
-                    a.append(_finding(reason, "attachments", reason.get("filename")))
-                else:
-                    a.append(_finding({"code": "ATTACHMENT_RESTRICTED", "message": str(reason)}, "attachments"))
-            if not a:
-                restricted = report["status"] == "RESTRICTED"
-                a.append(_finding({"code": "ATTACHMENT_INSPECTION_INCOMPLETE" if restricted else "ATTACHMENT_REVIEW_REQUIRED",
-                                   "category": "INSPECTION_FAILURE" if restricted else "REVIEW",
-                                   "severity": "CRITICAL" if restricted else "MINOR",
-                                   "message": "Attachment inspection was incomplete." if restricted else "Attachment requires review."},
-                                  "attachments"))
-    c, u, a = map(_dedupe, (c, u, a))
-    c_status, u_status = _module_status(c), _module_status(u)
-    a_status = _module_status(a)
-    priority = {"SAFE": 0, "WARNING": 1, "RESTRICTED": 2}
-    if report is not None:
-        declared_a = report.get("status", "RESTRICTED")
-        a_status = max((a_status, declared_a), key=lambda st: priority.get(st, 2))
-    status = max((c_status, u_status, a_status), key=priority.get)
-    incomplete_a = bool(report is not None and report.get("confidence_score") is None and a_status == "RESTRICTED")
-    score, contributions = _combined_scores(c, u, a, status, attachment_failure=incomplete_a)
-    findings = _dedupe(c + u + a)
-    result = {
-        "status": status,
-        "can_send": status == "SAFE",
-        "confidence_score": score,
-        "score_contributions": contributions,
-        "requires_acknowledgement": status == "WARNING",
-        "confidence_source": "policy_safety_score_uncalibrated",
-        "validation_results": {
-            "content": {"status": c_status, "findings": c},
-            "urls": "empty" if urls.get("url_count") == 0 and not u else {"status": u_status, "findings": u},
-            "attachments": "empty" if report is None else {
-                "status": a_status, "files": report.get("attachments", []),
-                "warnings": report.get("warnings", []),
-            },
-        },
-        "findings": findings,
-        "patterns_detected": sorted({f["code"] for f in findings}),
-        "inspection_coverage": {**content.get("coverage", {}), **urls.get("coverage", {})},
-        "popup": None,
+def _coerce_confidence(value):
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.5
+    if not isfinite(confidence) or not 0 <= confidence <= 1:
+        return 0.5
+    return confidence
+
+
+def _normalize_severity(value):
+    severity = str(value or "").upper()
+    if severity == "MINOR":
+        severity = "LOW"
+    return severity if severity in VALID_SEVERITIES else "LOW"
+
+def _is_hard_block_finding(item):
+    code = str(
+        item.get("code") or item.get("name") or ""
+    ).strip().upper()
+
+    return code in HARD_BLOCK_CODES
+
+def _scoring_findings(report, *, module):
+    findings = []
+    for item in _report_findings(report):
+        findings.append(ScoringFinding(
+            name=str(item.get("code") or item.get("name") or f"{module}_finding"),
+            description=str(item.get("message") or item.get("reason") or ""),
+            severity=_normalize_severity(item.get("severity")),
+            confidence=_coerce_confidence(item.get("confidence", 0.5)),
+            confirmed=(
+    item.get("confirmed") is True
+    or _is_hard_block_finding(item)
+),
+            evidence=str(item.get("evidence") or item.get("filename") or ""),
+        ))
+    return findings
+
+
+def _report_is_complete(report):
+    flag = report.get("inspection_complete", True)
+    if not isinstance(flag, bool):
+        # A non-boolean completeness flag cannot be trusted.
+        return False
+    if flag is False:
+        return False
+
+    if "coverage" in report:
+        coverage = report.get("coverage")
+        if not isinstance(coverage, dict):
+            return False
+        for value in coverage.values():
+            if value is False or value is None:
+                return False
+            if isinstance(value, str) and value.strip().lower() in _INCOMPLETE_COVERAGE_STATES:
+                return False
+
+    return not any(_is_inspection_failure(item) for item in _report_findings(report))
+
+
+def _coerce_score(value):
+    """Return a validated 0-100 score, or None when the value is unusable."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not isfinite(score) or not 0 <= score <= 100:
+        return None
+    return round(score, 2)
+
+
+def _coerce_risk(value):
+    """Return a non-negative context-risk value, or 0 when unusable."""
+    if value is None or isinstance(value, bool):
+        return 0.0
+    try:
+        risk = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not isfinite(risk) or risk < 0:
+        return 0.0
+    return risk
+
+
+def _module_result_from_report(module, report):
+    findings = _scoring_findings(report, module=module)
+    status = str(report.get("status") or "").strip().upper()
+
+    explicit_score = _coerce_score(report.get("safety_score"))
+    if explicit_score is None:
+        explicit_score = _coerce_score(report.get("confidence_score"))
+    context_penalty = _coerce_risk(report.get("context_penalty"))
+
+    inspection_complete = _report_is_complete(report)
+    if status not in {"", "SAFE", "WARNING", "RESTRICTED"}:
+        # Unknown status from an upstream validator: fail closed.
+        inspection_complete = False
+        findings.append(ScoringFinding(
+            name=f"{MODULE_LABEL[module]}_STATUS_UNKNOWN",
+            description=f"The {module} validator returned an unrecognized status.",
+            severity="HIGH",
+            confidence=1.0,
+            confirmed=False,
+        ))
+
+    actionable = [item for item in findings if item.severity != "INFO"]
+    blocking = any(
+        (
+            item.confirmed
+            and item.severity in BLOCKING_SEVERITIES
+        )
+        or item.name.strip().upper() in HARD_BLOCK_CODES
+        for item in actionable
+    )
+    risk = calculate_risk_points(findings)
+
+    # A validator-provided confidence/safety score is the module's final score.
+    # The compatibility interface in hybrid_scoring.py uses that score directly
+    # and derives module risk as (100 - score). Keep the same contract in the
+    # portal path instead of re-projecting an already-scored module from its
+    # findings a second time. Findings and inspection state still control the
+    # verdict, so a score can never override a hard block or incomplete scan.
+    if explicit_score is not None:
+        if status == "RESTRICTED" or blocking or not inspection_complete or explicit_score < WARNING_THRESHOLD:
+            band = "RESTRICTED"
+            score = min(explicit_score, WARNING_THRESHOLD - 0.1)
+        elif status == "WARNING" or actionable or explicit_score < SAFE_THRESHOLD:
+            band = "WARNING"
+            score = min(max(explicit_score, WARNING_THRESHOLD), SAFE_THRESHOLD - 0.1)
+        else:
+            band = "SAFE"
+            score = explicit_score
+        projection_risk = max(0.0, 100.0 - score)
+    elif status == "RESTRICTED" or blocking or not inspection_complete:
+        band = "RESTRICTED"
+        if explicit_score is not None and explicit_score < WARNING_THRESHOLD:
+            risk += (100.0 - explicit_score) * 0.5
+        if risk <= 0:
+            risk = POLICY_RESTRICTED_RISK
+        projection_risk = risk + context_penalty * 0.5
+        score = project_safety_score(projection_risk, band)
+    elif (
+        explicit_score is not None
+        and explicit_score < WARNING_THRESHOLD
+    ):
+        # An upstream validator that scored the module below the warning floor
+        # is treated as a restriction even when it did not set a status.
+        band = "RESTRICTED"
+        risk = max(risk + (100.0 - explicit_score) * 0.5, POLICY_RESTRICTED_RISK)
+        projection_risk = risk + context_penalty * 0.5
+        score = project_safety_score(projection_risk, band)
+    elif status == "WARNING" or actionable:
+        band = "WARNING"
+        # Findings drive the score. When an upstream validator only signals a
+        # warning (no itemized findings), its own score deficit becomes risk.
+        gap = 0.0 if explicit_score is None else max(0.0, 100.0 - explicit_score)
+        projection_risk = risk + gap + context_penalty * 0.5
+        score = project_safety_score(projection_risk, band)
+    else:
+        base = 100.0 if explicit_score is None else explicit_score
+        score = max(85.0, min(100.0, base - context_penalty))
+        projection_risk = 100.0 - score
+
+    # Match hybrid_scoring._adapt(): overall aggregation consumes each module's
+    # final safety score as risk = 100 - safety_score. Do not aggregate the
+    # pre-projection finding risk here, otherwise the portal and compatibility
+    # interface can report different overall scores for the same module scores.
+    projection_risk = max(0.0, 100.0 - score)
+
+    if status == "RESTRICTED":
+        findings.append(ScoringFinding(
+            name=f"{module.upper()}_POLICY_RESTRICTED",
+            description=f"The {module} validator returned RESTRICTED.",
+            severity="HIGH",
+            confidence=1.0,
+            confirmed=True,
+        ))
+
+    return ModuleResult(
+        module=module,
+        safety_score=score,
+        inspection_complete=inspection_complete,
+        findings=findings,
+        projection_risk=projection_risk,
+    )
+
+
+def _score_status(score, inspection_complete, findings=()):
+    if not inspection_complete:
+        return Verdict.RESTRICTED.value
+    if score is None or not 0 <= score <= 100:
+        return Verdict.RESTRICTED.value
+    if any(
+        finding.confirmed and finding.severity in BLOCKING_SEVERITIES
+        for finding in findings
+    ):
+        return Verdict.RESTRICTED.value
+    if score < WARNING_THRESHOLD:
+        return Verdict.RESTRICTED.value
+    if score < SAFE_THRESHOLD:
+        return Verdict.WARNING.value
+    return Verdict.SAFE.value
+
+
+def _public_finding(item, source):
+    return {
+        **item,
+        "code": str(item.get("code") or item.get("name") or "SECURITY_FINDING"),
+        "severity": _normalize_severity(item.get("severity")),
+        "message": str(item.get("message") or item.get("reason") or "Security finding requires review."),
+        "source": source,
     }
-    if status == "WARNING":
-        result["popup"] = {"show": True, "type": "WARNING", "title": "Email Security Warning",
-                           "message": "Review the detected security findings and acknowledge before sending.",
-                           "actions": ["EDIT_MAIL", "CLOSE"]}
-    elif status == "RESTRICTED":
-        result["popup"] = {"show": True, "type": "RESTRICTED", "title": "Email Restricted",
-                           "message": "Sending is blocked until the findings are corrected and revalidated.",
-                           "actions": ["CLOSE"]}
-    if report and report.get("warning_challenge") and status == "WARNING":
-        result["warning_challenge"] = report["warning_challenge"]
-    return result
 
 
-def decide_content_and_urls(content: dict, urls: dict) -> dict[str, Any]:
-    return decide_email(content, urls, attachments=None)
+def _report_for_module(data, *, module):
+    """Never let a malformed detector result disappear into a SAFE verdict."""
+    if isinstance(data, dict):
+        findings = data.get("findings", [])
+        if isinstance(findings, list) and all(isinstance(item, dict) for item in findings):
+            return data
+
+    name = MODULE_LABEL[module]
+    return {
+        "status": "RESTRICTED",
+        "inspection_complete": False,
+        "findings": [{
+            "code": f"{name}_SCAN_INCOMPLETE",
+            "category": "INSPECTION_FAILURE",
+            "severity": "HIGH",
+            "message": f"The {module} scanner did not return a valid inspection report.",
+        }],
+        "coverage": {"url_syntax_inspection" if module == "url" else "runtime_text_rules": "failed"},
+        "attachments": [],
+    }
 
 
-def decide_attachment_report(report: dict) -> dict[str, Any]:
-    """Attachment-only policy: other module scores are neutral, not inspections."""
-    return decide_email({"findings": [], "coverage": {}},
-                        {"findings": [], "url_count": 0, "coverage": {}}, attachments=report)
+def decide_email(content, urls, attachment_report=None):
+    """Adapt the existing validator reports to the hybrid decision engine.
+
+    The validator report schemas and the endpoint response shape remain intact.
+    Explicit safety/confidence scores are honored; otherwise raw findings use
+    the existing confidence-adjusted severity penalty policy.
+    """
+    reports = {
+        "content": _report_for_module(content, module="content"),
+        "url": _report_for_module(urls, module="url"),
+        "attachments": (
+            {"status": "SAFE", "findings": [], "attachments": []}
+            if attachment_report is None
+            else _report_for_module(attachment_report, module="attachments")
+        ),
+    }
+
+    results = [
+        _module_result_from_report(name, report)
+        for name, report in reports.items()
+    ]
+    decision = evaluate_email(results)
+    result_by_module = {item.module: item for item in results}
+
+    validation_results = {}
+    for name in ("content", "url"):
+        report = reports[name]
+        result = result_by_module[name]
+        public_report = {
+            **report,
+            "findings": [
+                _public_finding(item, "urls" if name == "url" else name)
+                for item in report.get("findings", [])
+                if isinstance(item, dict)
+            ],
+            "status": _score_status(
+                result.safety_score,
+                result.inspection_complete,
+                result.findings,
+            ),
+            "confidence_score": result.safety_score,
+            "safety_score": result.safety_score,
+        }
+        if name == "url" and not report.get("url_count") and not public_report["findings"]:
+            validation_results["urls"] = "empty"
+        else:
+            validation_results[name if name != "url" else "urls"] = public_report
+
+    attachment_result = result_by_module["attachments"]
+    validation_results["attachments"] = {
+        **reports["attachments"],
+        "status": _score_status(
+            attachment_result.safety_score,
+            attachment_result.inspection_complete,
+            attachment_result.findings,
+        ),
+        "confidence_score": attachment_result.safety_score,
+        "safety_score": attachment_result.safety_score,
+        "files": reports["attachments"].get("attachments", []),
+    }
+
+    raw_findings = []
+    for name, report in reports.items():
+        source = "urls" if name == "url" else name
+        raw_findings.extend(
+            _public_finding(item, source)
+            for item in _report_findings(report)
+        )
+
+    return {
+        "status": decision["verdict"],
+        "can_send": decision["sending_allowed"],
+        "confidence_score": decision["overall_safety_score"],
+        "requires_acknowledgement": decision["verdict"] == Verdict.WARNING.value,
+        "confidence_source": "hybrid_weighted_policy_score",
+        "validation_results": validation_results,
+        "findings": raw_findings,
+        "warning_challenge": reports["attachments"].get("warning_challenge"),
+        "decision": decision,
+    }
+
+
+def calculate_weighted_score(results):
+    missing = REQUIRED_MODULES - set(results)
+    if missing:
+        raise ValueError(f"Missing module results: {', '.join(sorted(missing))}")
+
+    score = 0.0
+
+    for module, weight in MODULE_WEIGHTS.items():
+        score += results[module].safety_score * weight
+
+    return round(score, 2)
+
+
+def get_lowest_module(results):
+    return min(
+        results.values(),
+        key=lambda result: (
+            result.safety_score,
+            MODULE_ORDER.get(result.module, len(MODULE_ORDER)),
+        ),
+    )
+
+
+def get_confirmed_blocking_findings(results):
+    blocking = []
+
+    for result in results.values():
+        for finding in result.findings:
+            if (
+                (
+                    finding.confirmed
+                    and finding.severity in BLOCKING_SEVERITIES
+                )
+                or finding.name.strip().upper() in HARD_BLOCK_CODES
+            ):
+                blocking.append({
+                    "module": result.module,
+                    "name": finding.name,
+                    "severity": finding.severity,
+                    "description": finding.description,
+                })
+
+    return blocking
+
+
+def _overall_projection_risk(results, verdict, lowest):
+    """Aggregate raw module risk for the overall score.
+
+    The weakest module anchors the risk; other modules contribute their own
+    evidence at reduced weight, and each additional module below the SAFE
+    threshold adds corroborating risk. Module scores themselves are unchanged.
+    """
+    risks = {}
+    for name, result in results.items():
+        risk = max(0.0, float(getattr(result, "projection_risk", 0.0) or 0.0))
+        if risk == 0.0 and result.safety_score < 100.0:
+            # Results built outside the report adapter carry no raw risk.
+            risk = 100.0 - result.safety_score
+        risks[name] = risk
+
+    ordered = sorted(risks.values(), reverse=True)
+    risk_total = ordered[0] + OVERALL_CORROBORATION_FACTOR * sum(ordered[1:])
+    if verdict == Verdict.SAFE:
+        return min(MAX_CONTEXT_PENALTY, risk_total)
+
+    flagged = sum(
+        1 for result in results.values()
+        if result.safety_score < SAFE_THRESHOLD
+    )
+    risk_total += OVERALL_EXTRA_MODULE_RISK * max(0, flagged - 1)
+    if verdict == Verdict.RESTRICTED and lowest.safety_score >= WARNING_THRESHOLD:
+        # The restriction came from policy or an unresolved investigation
+        # rather than a low module score; keep the overall risk proportionate.
+        risk_total = max(risk_total, POLICY_RESTRICTED_RISK)
+    return risk_total
+
+
+def make_response(
+    verdict,
+    results,
+    lowest,
+    investigation_status,
+    investigation_required,
+    deep_investigation_required,
+    reasons,
+    blocking_findings,
+):
+    # The reported index aggregates all modules but is projected into the band
+    # owned by the verdict, so it can never contradict the weakest module.
+    risk_total = _overall_projection_risk(results, verdict, lowest)
+    overall_score = project_overall_score(risk_total, verdict.value)
+    overall_score = clamp_to_status(verdict.value, overall_score)
+
+    return {
+        "verdict": verdict.value,
+        "overall_safety_score": overall_score,
+        "module_scores": {
+            name: result.safety_score
+            for name, result in results.items()
+        },
+        "lowest_scoring_module": lowest.module,
+        "lowest_module_score": lowest.safety_score,
+        "investigation": {
+            "required": investigation_required,
+            "deep_investigation_required": deep_investigation_required,
+            "status": investigation_status.value,
+        },
+        "blocking_findings": blocking_findings,
+        "reasons": reasons,
+        "sending_allowed": verdict == Verdict.SAFE,
+        "modules": {
+            name: module_to_dict(result)
+            for name, result in results.items()
+        },
+    }
+
+
+def evaluate_email(
+    module_results,
+    investigation_status=InvestigationStatus.NOT_REQUIRED,
+):
+    """
+    Evaluate all mandatory OMG modules.
+
+    investigation_status can be:
+      NOT_REQUIRED
+      PENDING
+      CLEARED
+      UNRESOLVED
+
+    An investigation status of CLEARED means follow-up checks
+    have actually been completed and cleared the concern.
+    """
+    if isinstance(investigation_status, str):
+        try:
+            investigation_status = InvestigationStatus(
+                investigation_status.strip().upper()
+            )
+        except ValueError as exc:
+            raise ValueError("Invalid investigation status") from exc
+    if not isinstance(investigation_status, InvestigationStatus):
+        raise ValueError("Invalid investigation status")
+
+    results = {}
+    for result in module_results:
+        if not isinstance(result, ModuleResult):
+            raise TypeError("evaluate_email expects ModuleResult objects.")
+        if result.module in results:
+            raise ValueError(f"Duplicate module result: {result.module}")
+        results[result.module] = result
+
+    if set(results) != REQUIRED_MODULES:
+        raise ValueError(
+            "All three modules are mandatory: "
+            "content, url, attachments."
+        )
+
+    weighted_score = calculate_weighted_score(results)
+    lowest = get_lowest_module(results)
+
+    blocking_findings = get_confirmed_blocking_findings(results)
+
+    incomplete_modules = sorted(
+        name for name, result in results.items()
+        if not result.inspection_complete
+    )
+
+    investigation_required = (
+        lowest.safety_score < INVESTIGATION_THRESHOLD
+    )
+
+    deep_investigation_required = (
+        lowest.safety_score < DEEP_INVESTIGATION_THRESHOLD
+    )
+
+    reasons = []
+
+    if incomplete_modules:
+        verdict = Verdict.RESTRICTED
+        reasons.append(
+            "Mandatory inspection incomplete: " + ", ".join(incomplete_modules)
+        )
+
+    elif blocking_findings:
+        verdict = Verdict.RESTRICTED
+        reasons.append("Confirmed high or critical security finding.")
+
+    elif investigation_status is InvestigationStatus.UNRESOLVED:
+        verdict = Verdict.RESTRICTED
+        reasons.append("Risk remains unresolved after investigation.")
+
+    elif (
+        deep_investigation_required
+        and investigation_status is not InvestigationStatus.CLEARED
+    ):
+        verdict = Verdict.RESTRICTED
+        reasons.append("Lowest module score is below the permitted warning threshold.")
+
+    elif investigation_status is InvestigationStatus.PENDING:
+        verdict = Verdict.WARNING
+        reasons.append("Additional investigation is pending.")
+
+    elif (
+        investigation_status is InvestigationStatus.NOT_REQUIRED
+        and investigation_required
+    ):
+        verdict = Verdict.WARNING
+        reasons.append("Lowest module score requires additional investigation.")
+
+    elif weighted_score >= SAFE_THRESHOLD:
+        verdict = Verdict.SAFE
+        reasons.append("All scans complete and safety score is acceptable.")
+
+    elif weighted_score >= WARNING_THRESHOLD:
+        verdict = Verdict.WARNING
+        reasons.append("Overall safety score is in the warning range.")
+
+    else:
+        verdict = Verdict.RESTRICTED
+        reasons.append(
+            "Overall safety score is below the permitted warning threshold."
+        )
+
+    return make_response(
+        verdict,
+        results,
+        lowest,
+        investigation_status,
+        investigation_required,
+        deep_investigation_required,
+        reasons,
+        blocking_findings,
+    )

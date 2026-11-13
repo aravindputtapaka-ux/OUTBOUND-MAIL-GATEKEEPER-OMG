@@ -1,7 +1,7 @@
 """OMG explainable, dynamic POLICY SAFETY scores (not calibrated ML probabilities).
 
-Higher = safer. Client scoring bands: [0,75) RESTRICTED, [75,86)
-WARNING, [86,100] SAFE. Actual security policy verdicts take precedence:
+Higher = safer. Client scoring bands: [0,75) RESTRICTED, [75,85)
+WARNING, [85,100] SAFE. Actual security policy verdicts take precedence:
 never use a score to downgrade a block, approve an incomplete scan, or bypass
 warning acknowledgment. An unchanged set of identical findings should yield
 an unchanged score (deterministic, auditable behavior).

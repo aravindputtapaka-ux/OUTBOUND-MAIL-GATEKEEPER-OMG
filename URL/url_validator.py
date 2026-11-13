@@ -1,21 +1,80 @@
+"""Structural URL inspection for outbound email.
+
+This module performs structural checks only. It never browses a destination,
+resolves external reputation, or claims that a URL is malicious/safe.
+
+Link classification matters for the verdict: in-page anchors (``#section``),
+relative links (``/unsubscribe``) and application schemes such as ``mailto:``
+or ``tel:`` are normal in legitimate mail and must NOT be flagged. Executable
+schemes (``javascript:``, ``data:``, ``vbscript:``, ...) are active-content
+threats and are reported as confirmed critical findings.
+"""
+from __future__ import annotations
+
 import ipaddress
-import html as html_utils
-from difflib import SequenceMatcher
-from urllib.parse import unquote, urlsplit
 import os
 import re
-from urllib.parse import urlparse
+import warnings
+from urllib.parse import urlparse, urlsplit
 
 import idna
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+
+
+# A body that is only a URL is still valid email text. BeautifulSoup warns when
+# input resembles a URL/filename; that warning is irrelevant to link inspection.
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 
 # Extract explicit HTTP(S) and bare www. links from email text.
-# This does not verify external domain reputation.
 URL_PATTERN = re.compile(
     r"""(?<![A-Za-z0-9@])(?:https?://|www\.)[^\s<>"']+""",
     re.IGNORECASE,
 )
+
+# Punctuation that commonly follows a URL inside a sentence.
+TRAILING_PUNCTUATION = ".,;:!?)]}"
+
+# Schemes that are legitimate links in email and have no network destination.
+BENIGN_SCHEMES = frozenset({
+    "mailto", "tel", "sms", "cid", "mid", "callto", "calendar",
+})
+
+# Schemes that can execute or inline active content. A link using one of
+# these in outbound mail is unambiguously hostile.
+DANGEROUS_SCHEMES = frozenset({
+    "javascript", "data", "vbscript", "file", "blob", "filesystem", "about",
+})
+
+# Severity metadata for every finding this module can emit. The scoring
+# engine consumes these fields directly; omitting them silently downgrades a
+# finding to LOW.
+FINDING_SEVERITIES = {
+    "DANGEROUS_URL_SCHEME": "CRITICAL",
+    "NON_HTTP_LINK": "MEDIUM",
+    "MALFORMED_URL": "MEDIUM",
+    "INVALID_HOSTNAME": "MEDIUM",
+    "INSECURE_LOGIN_URL": "MEDIUM",
+    "IP_ADDRESS_LINK": "MEDIUM",
+    "URL_CREDENTIALS_PRESENT": "HIGH",
+    "LINK_TEXT_MISMATCH": "HIGH",
+    "IDN_HOSTNAME": "LOW",
+    "SHORTENED_URL": "LOW",
+    "ACCOUNT_UPDATE_LINK_REVIEW": "MINOR",
+    "PAYMENT_UPDATE_LINK_REVIEW": "MINOR",
+}
+
+
+def _finding(code, message, *, confirmed=False):
+    finding = {
+        "code": code,
+        "category": "SUSPICIOUS_LINK",
+        "severity": FINDING_SEVERITIES.get(code, "MEDIUM"),
+        "message": message,
+    }
+    if confirmed:
+        finding["confirmed"] = True
+    return finding
 
 
 def _normalize_visible_link(value: str) -> str:
@@ -26,8 +85,26 @@ def _normalize_visible_link(value: str) -> str:
     """
     return "https://" + value if value.lower().startswith("www.") else value
 
-# Remove common punctuation that may follow a URL in a sentence.
-TRAILING_PUNCTUATION = ".,;:!?)]}"
+
+def _network_href(href: str) -> str | None:
+    """Return the inspectable HTTP(S) form of a link, or None.
+
+    ``None`` means the value is not a network destination (fragment, relative
+    path, mailto:, tel:, ...), so it must not be treated as a suspicious link.
+    """
+    value = (href or "").strip()
+    if not value:
+        return None
+    if value.startswith("#"):
+        return None
+    # Protocol-relative links (//host/path) do have a network destination.
+    if value.startswith("//"):
+        return "https:" + value
+    try:
+        scheme = urlparse(value).scheme.lower()
+    except ValueError:
+        return None
+    return value if scheme in {"http", "https"} else None
 
 
 def _validate_hostname(hostname: str) -> tuple[bool, bool]:
@@ -70,56 +147,73 @@ def _validate_hostname(hostname: str) -> tuple[bool, bool]:
     return True, is_internationalized
 
 
+def _scheme_of(href: str) -> str | None:
+    try:
+        return (urlparse(href).scheme or "").lower() or None
+    except ValueError:
+        return None
+
+
 def _inspect_single_url(
     href: str,
     display_text: str = "",
 ) -> list[dict]:
-    """Inspect one URL and return any security findings."""
-    findings = []
+    """Inspect one URL and return any security findings.
 
-    href = href.strip()
+    Non-network links that are legitimate in email (mailto:, tel:, cid:,
+    fragments and relative paths) yield no findings.
+    """
+    findings: list[dict] = []
 
+    href = (href or "").strip()
     if not href:
         return findings
 
-    parsed = urlparse(href)
-    scheme = parsed.scheme.lower()
-
-    # Preserve the existing rule for non-HTTP(S) hyperlinks.
-    if scheme not in {"http", "https"}:
-        findings.append(
-            {
-                "code": "NON_HTTP_LINK",
-                "category": "SUSPICIOUS_LINK",
-                "message": "A hyperlink uses a non-HTTP(S) scheme.",
-            }
-        )
+    # In-page anchors and relative links have no network destination.
+    if href.startswith("#"):
         return findings
+
+    scheme = _scheme_of(href)
+
+    if scheme in BENIGN_SCHEMES:
+        return findings
+
+    if scheme in DANGEROUS_SCHEMES:
+        findings.append(_finding(
+            "DANGEROUS_URL_SCHEME",
+            "A hyperlink uses a scheme that can execute or inline active content.",
+            confirmed=True,
+        ))
+        return findings
+
+    if scheme is None:
+        # Relative link: "/unsubscribe", "images/logo.png", "?page=2".
+        # Protocol-relative "//host/path" is a real network destination.
+        if href.startswith("//"):
+            href = "https:" + href
+        else:
+            return findings
+
+    elif scheme not in {"http", "https"}:
+        # FTP, news, custom application schemes, etc.
+        return [_finding(
+            "NON_HTTP_LINK",
+            "A hyperlink uses a non-HTTP(S) scheme.",
+        )]
+
+    parsed = urlparse(href)
 
     try:
         hostname = parsed.hostname
         parsed.port  # Accessing this validates the port.
     except ValueError:
-        findings.append(
-            {
-                "code": "MALFORMED_URL",
-                "category": "SUSPICIOUS_LINK",
-                "message": "A URL contains an invalid host or port.",
-            }
-        )
-        return findings
+        return [_finding("MALFORMED_URL", "A URL contains an invalid host or port.")]
 
     if not hostname or not parsed.netloc:
-        findings.append(
-            {
-                "code": "MALFORMED_URL",
-                "category": "SUSPICIOUS_LINK",
-                "message": (
-                    "An HTTP(S) hyperlink has a missing or invalid hostname."
-                ),
-            }
-        )
-        return findings
+        return [_finding(
+            "MALFORMED_URL",
+            "An HTTP(S) hyperlink has a missing or invalid hostname.",
+        )]
 
     # Warn if an account-login/credential page is linked using plain HTTP.
     # This signal alone does not prove phishing or malware.
@@ -128,22 +222,16 @@ def _inspect_single_url(
         parsed.path + "?" + parsed.query,
         flags=re.IGNORECASE,
     ):
-        findings.append({
-            "code": "INSECURE_LOGIN_URL",
-            "category": "SUSPICIOUS_LINK",
-            "message": "A login or verification link uses unencrypted HTTP; review before sending.",
-        })
+        findings.append(_finding(
+            "INSECURE_LOGIN_URL",
+            "A login or verification link uses unencrypted HTTP; review before sending.",
+        ))
 
     if parsed.username is not None or parsed.password is not None:
-        findings.append(
-            {
-                "code": "URL_CREDENTIALS_PRESENT",
-                "category": "SUSPICIOUS_LINK",
-                "message": (
-                    "A URL contains embedded user information before its host."
-                ),
-            }
-        )
+        findings.append(_finding(
+            "URL_CREDENTIALS_PRESENT",
+            "A URL contains embedded user information before its host.",
+        ))
 
     try:
         ipaddress.ip_address(hostname)
@@ -152,36 +240,25 @@ def _inspect_single_url(
         is_ip_address = False
 
     if is_ip_address:
-        findings.append(
-            {
-                "code": "IP_ADDRESS_LINK",
-                "category": "SUSPICIOUS_LINK",
-                "message": "A hyperlink uses an IP address as its host.",
-            }
-        )
+        findings.append(_finding(
+            "IP_ADDRESS_LINK",
+            "A hyperlink uses an IP address as its host.",
+        ))
     else:
         valid_hostname, is_internationalized = _validate_hostname(hostname)
 
         if not valid_hostname:
-            findings.append(
-                {
-                    "code": "INVALID_HOSTNAME",
-                    "category": "SUSPICIOUS_LINK",
-                    "message": "A hyperlink contains a malformed hostname.",
-                }
-            )
+            findings.append(_finding(
+                "INVALID_HOSTNAME",
+                "A hyperlink contains a malformed hostname.",
+            ))
 
         if is_internationalized:
-            findings.append(
-                {
-                    "code": "IDN_HOSTNAME",
-                    "category": "SUSPICIOUS_LINK",
-                    "message": (
-                        "A hyperlink uses Unicode or Punycode hostname "
-                        "characters. Review the domain carefully."
-                    ),
-                }
-            )
+            findings.append(_finding(
+                "IDN_HOSTNAME",
+                "A hyperlink uses Unicode or Punycode hostname characters. "
+                "Review the domain carefully.",
+            ))
 
     # Compare the displayed URL with the actual destination.
     if display_text:
@@ -192,17 +269,76 @@ def _inspect_single_url(
             displayed.startswith(("http://", "https://"))
             and displayed != actual
         ):
-            findings.append(
-                {
-                    "code": "LINK_TEXT_MISMATCH",
-                    "category": "SUSPICIOUS_LINK",
-                    "message": (
-                        "The displayed URL differs from the hyperlink target."
-                    ),
-                }
-            )
+            findings.append(_finding(
+                "LINK_TEXT_MISMATCH",
+                "The displayed URL differs from the hyperlink target.",
+            ))
 
     return findings
+
+
+def _document_candidates(soup: BeautifulSoup) -> list[str]:
+    """Return unique, structurally inspectable network URLs in the document."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        if value and value not in seen:
+            seen.add(value)
+            candidates.append(value)
+
+    for link in soup.find_all("a", href=True):
+        network = _network_href((link.get("href") or "").strip())
+        if network:
+            add(network)
+
+    for match in URL_PATTERN.finditer(soup.get_text(" ", strip=True)):
+        network = _network_href(
+            _normalize_visible_link(match.group(0).rstrip(TRAILING_PUNCTUATION))
+        )
+        if network:
+            add(network)
+
+    return candidates
+
+
+def _dedupe(findings: list[dict]) -> list[dict]:
+    unique: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for item in findings:
+        key = (str(item.get("code", "")), str(item.get("message", "")))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _inspect_document(soup: BeautifulSoup) -> list[dict]:
+    findings: list[dict] = []
+    inspected: set[str] = set()
+
+    # 1. Inspect HTML hyperlinks, including non-HTTP(S) schemes.
+    for link in soup.find_all("a", href=True):
+        href = (link.get("href") or "").strip()
+        if not href or href in inspected:
+            continue
+        inspected.add(href)
+        findings.extend(_inspect_single_url(href, link.get_text(" ", strip=True)))
+
+    # 2. Inspect URLs written directly in the email's visible text.
+    visible_text = soup.get_text(" ", strip=True)
+
+    for match in URL_PATTERN.finditer(visible_text):
+        href = _normalize_visible_link(match.group(0).rstrip(TRAILING_PUNCTUATION))
+
+        if not href or href in inspected:
+            continue
+
+        inspected.add(href)
+        findings.extend(_inspect_single_url(href))
+
+    return _dedupe(findings)
 
 
 def inspect_urls(html: str) -> list[dict]:
@@ -213,203 +349,105 @@ def inspect_urls(html: str) -> list[dict]:
     whether a website is malicious or safe using live reputation data.
     """
     soup = BeautifulSoup(html or "", "html.parser")
-    findings = []
+    return _inspect_document(soup)
 
-    # Track inspected URLs to avoid duplicate findings when a URL appears
-    # both as an href and as visible text.
-    inspected_urls = set()
-
-    # 1. Inspect HTML hyperlinks, including non-HTTP(S) schemes.
-    for link in soup.find_all("a", href=True):
-        href = link.get("href", "").strip()
-        display_text = link.get_text(" ", strip=True)
-
-        if not href:
-            continue
-
-        key = href
-
-        if key in inspected_urls:
-            continue
-
-        inspected_urls.add(key)
-        findings.extend(_inspect_single_url(href, display_text))
-
-    # 2. Inspect URLs written directly in the email's visible text.
-    visible_text = soup.get_text(" ", strip=True)
-
-    for match in URL_PATTERN.finditer(visible_text):
-        href = _normalize_visible_link(match.group(0).rstrip(TRAILING_PUNCTUATION))
-
-        if not href:
-            continue
-
-        key = href
-
-        if key in inspected_urls:
-            continue
-
-        inspected_urls.add(key)
-        findings.extend(_inspect_single_url(href))
-
-    return findings
 
 SHORTENER_HOSTS = frozenset({"bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "ow.ly"})
 
-def _normalized_email_url_text(body: str, html: str) -> str:
-    """Decode common email encodings without fetching or following links.
 
-    Bounded decoding also exposes HTML-escaped and percent-escaped URLs. Do
-    not trust the result as a safe destination; validation is static only.
-    """
-    raw = "\n".join((body or "", html or ""))[:200_000]
-    for _ in range(2):
-        changed = html_utils.unescape(raw)
-        changed = re.sub(r"\\u003[aA]", ":", changed)
-        changed = changed.replace("\\/", "/")
-        # Unquote only if the content contains an encoded URL *prefix*, not
-        # arbitrary URL query parameters that might change their semantics.
-        if re.search(r"https?%3a%2f%2f|www%2e", changed, re.I):
-            changed = unquote(changed)
-        if changed == raw:
-            break
-        raw = changed[:200_000]
-    return raw
-
-
-def _candidate_urls(text: str) -> list[tuple[str, str]]:
-    """Return (destination, displayed text) preserving anchor link labels."""
-    document = BeautifulSoup(text, "html.parser")
-    results: list[tuple[str, str]] = []
-    for a in document.find_all("a", href=True):
-        url = _normalize_visible_link(html_utils.unescape(a.get("href", "")).strip())
-        if url:
-            results.append((url, a.get_text(" ", strip=True)))
-    for match in URL_PATTERN.finditer(document.get_text(" ", strip=True)):
-        link = _normalize_visible_link(match.group(0).rstrip(TRAILING_PUNCTUATION))
-        if link:
-            results.append((link, ""))
-    return list(dict.fromkeys(results))
+def _trusted_domains() -> set[str]:
+    return {
+        x.strip().lower().rstrip(".")
+        for x in os.getenv("OMG_TRUSTED_LINK_DOMAINS", "").split(",")
+        if x.strip()
+    }
 
 
 def validate_urls(body: str = "", html: str = "", extra_urls: list[str] | None = None) -> dict:
-    """Statically inspect URL structure and *email-context* security signals.
+    """Original HTML/plain URL inspection + a shortener indicator (no reputation lookup)."""
+    combined = "\n\n".join(x for x in (body, html) if x)
+    soup = BeautifulSoup(combined, "html.parser")
 
-    No DNS queries, redirect following, downloaded pages or domain-reputation
-    assertions occur. A valid HTTPS scheme is NOT proof of a legitimate link.
-    """
-    normalized = _normalized_email_url_text(body, html)
-    doc = BeautifulSoup(normalized, "html.parser")
-    visible = re.sub(r"\s+", " ", doc.get_text(" ", strip=True))[:100_000]
-    entries = _candidate_urls(normalized)
-    entries.extend((v.strip(), "") for v in (extra_urls or []) if isinstance(v, str) and v.strip())
-    candidates = list(dict.fromkeys((url for url, _ in entries)))
-    findings: list[dict] = []
-    seen = set()
-    for value, display in entries:
-        for issue in _inspect_single_url(value, display):
-            k = (value, issue["code"])
-            if k not in seen:
-                findings.append(issue)
-                seen.add(k)
+    findings = _inspect_document(soup)
+    candidates = _document_candidates(soup)
 
-    trusted = {
-        x.strip().lower().rstrip(".")
-        for x in os.getenv("OMG_TRUSTED_LINK_DOMAINS", "").split(",") if x.strip()
-    }
+    # Explicit URL field(s) are inspected even when not written in the body.
+    # Include non-http schemes in the detector rather than silently ignoring them.
+    listed_urls = [x.strip() for x in (extra_urls or []) if x and x.strip()]
+    seen_candidates = set(candidates)
+    for value in listed_urls:
+        findings.extend(_inspect_single_url(value))
+        if value not in seen_candidates:
+            seen_candidates.add(value)
+            network = _network_href(value)
+            if network:
+                candidates.append(network)
+
+    # Distinct static warning heuristic; does NOT assert the target is malicious.
+    seen_hosts = set()
+    for value in candidates:
+        try:
+            host = (urlsplit(value).hostname or "").lower().rstrip(".")
+        except ValueError:
+            continue
+        if host in SHORTENER_HOSTS and host not in seen_hosts:
+            seen_hosts.add(host)
+            findings.append(_finding(
+                "SHORTENED_URL",
+                "A URL shortener obscures its destination; review the redirect before sending.",
+            ))
+
+    # Context matters: a structurally normal HTTPS URL may still ask users to
+    # change financial details or verify an account. This is review-only; no
+    # live reputation or sender-identity verification is performed here.
+    # Configure OMG_TRUSTED_LINK_DOMAINS with explicit, verified domains.
+    trusted = _trusted_domains()
 
     def allowlisted(host: str) -> bool:
         return any(host == domain or host.endswith("." + domain) for domain in trusted)
 
-    untrusted = []
-    hosts = set()
-    for value in candidates:
+    untrusted_urls = []
+    for value in sorted(set(candidates)):
         try:
-            hostname = (urlsplit(value).hostname or "").lower().rstrip(".")
+            parsed = urlsplit(value)
+            hostname = (parsed.hostname or "").lower().rstrip(".")
+            if hostname and not allowlisted(hostname):
+                untrusted_urls.append(value)
         except ValueError:
             continue
-        if not hostname:
-            continue
-        hosts.add(hostname)
-        if hostname in SHORTENER_HOSTS:
-            findings.append({"code": "SHORTENED_URL", "category": "SUSPICIOUS_LINK", "severity": "MEDIUM",
-                             "message": "A URL shortener conceals its destination; review the target."})
-        if hostname.endswith((".example", ".test", ".invalid")) or hostname == "example":
-            findings.append({"code": "RESERVED_TEST_DOMAIN", "category": "URL_INFORMATION", "severity": "INFO",
-                             "message": "Link uses a reserved test domain; it is not a verified payment or login destination."})
-        if not allowlisted(hostname):
-            untrusted.append(value)
-            # Compare only against explicitly configured trusted registrable
-            # domains; resemblance alone is a warning, never a malware claim.
-            for known in trusted:
-                if hostname != known and not hostname.endswith("." + known):
-                    candidate_root = hostname.split(".")[-2:] if "." in hostname else [hostname]
-                    trusted_root = known.split(".")[-2:] if "." in known else [known]
-                    if (candidate_root[-1:] == trusted_root[-1:] and
-                            SequenceMatcher(None, ".".join(candidate_root), ".".join(trusted_root)).ratio() >= 0.84):
-                        findings.append({"code": "LOOKALIKE_TRUSTED_DOMAIN", "category": "DOMAIN_IMPERSONATION",
-                                         "severity": "MEDIUM",
-                                         "message": "A URL domain resembles an explicitly trusted domain but is not allowlisted."})
-                        break
-
-    # The host alone never proves fraud: account-change and financial-change
-    # warnings require an actual URL *and* corroborating email instructions.
-    if untrusted:
-        account_topic = bool(re.search(r"\b(?:account|identity|login|profile)\b", visible, re.I))
-        account_update = bool(re.search(
+    if untrusted_urls:
+        visible = soup.get_text(" ", strip=True)
+        visible = re.sub(r"\s+", " ", visible)[:100_000]
+        account_topic = re.search(r"\b(?:account|identity|login|profile)\b", visible, re.I)
+        account_update = re.search(
             r"\b(?:review|verify|validate|confirm|update|revalidate)\b.{0,75}"
             r"\b(?:account|identity|details|information|profile|login)\b"
             r"|\b(?:account|profile)\b.{0,70}\b(?:outdated|verification|update|verify|review)\b",
             visible, re.I,
-        ))
-        payment_topic = bool(re.search(r"\b(?:payment|invoice|bank|vendor|billing|remittance|transfer)\b", visible, re.I))
-        payment_change = bool(re.search(
-            r"\b(?:revised|updated|changed|new|different)\b.{0,90}"
-            r"\b(?:payment|bank|account|instructions|details)\b"
-            r"|\b(?:payment|bank|account|instructions|details)\b.{0,90}"
-            r"\b(?:changed|updated|revised|replaced)\b", visible, re.I,
-        ))
-        bypass = bool(re.search(
-            r"\b(?:bypass|skip|ignore|circumvent)\b.{0,65}\b(?:approval|process|review|checks?|verification)\b"
-            r"|\b(?:do\s+not|don't)\s+(?:verify|contact|confirm|consult)\b.{0,80}"
-            r"\b(?:vendor|finance|manager|bank|payment|account)\b", visible, re.I,
-        ))
+        )
+        payment_topic = re.search(r"\b(?:payment|invoice|bank|vendor|billing|remittance)\b", visible, re.I)
+        payment_change = re.search(
+            r"\b(?:revised|updated|changed|new)\b.{0,75}\b(?:payment|bank|account|instructions|details)\b"
+            r"|\b(?:payment|bank|account|instructions|details)\b.{0,75}\b(?:changed|updated|revised)\b",
+            visible, re.I,
+        )
         if account_topic and account_update:
-            findings.append({"code": "ACCOUNT_UPDATE_LINK_REVIEW", "category": "LINK_CONTEXT", "severity": "MEDIUM",
-                             "message": "Account-update instructions contain a non-allowlisted URL; verify ownership and authorization."})
+            findings.append(_finding(
+                "ACCOUNT_UPDATE_LINK_REVIEW",
+                "Account-update request includes a URL whose destination and authorization have not been independently verified.",
+            ))
         if payment_topic and payment_change:
-            findings.append({"code": "PAYMENT_CHANGE_LINK_REVIEW", "category": "LINK_CONTEXT", "severity": "MEDIUM",
-                             "message": "Changed payment details are accompanied by a non-allowlisted URL; confirm the bank details independently."})
-        if payment_topic and payment_change and bypass:
-            findings.append({"code": "PAYMENT_APPROVAL_BYPASS_LINK", "category": "LINK_CONTEXT", "severity": "HIGH",
-                             "message": "Payment-update link appears together with instructions to evade independent approval or verification."})
-        secret_request = bool(re.search(
-            r"\b(?:submit|send|share|provide|enter|type|upload)\b.{0,90}"
-            r"\b(?:your\s+)?(?:password|otp|one.time\s+(?:code|password)|verification\s+code)\b",
-            visible, re.I,
-        ))
-        # Do not flag education such as 'never share your password'.
-        security_advice = bool(re.search(
-            r"\b(?:never|do\s+not|don't)\s+(?:send|share|provide|enter|submit|upload)\b",
-            visible, re.I,
-        ))
-        link_instruction = bool(re.search(r"\b(?:click|open|visit|follow|use|at|via)\b.{0,100}"
-                                          r"\b(?:link|url|website|page|portal|https?)\b", visible, re.I))
-        if secret_request and link_instruction and not security_advice:
-            findings.append({"code": "CREDENTIAL_PHISHING", "category": "LINK_CONTEXT", "severity": "CRITICAL",
-                             "message": "A link is paired with an instruction to submit a password or authentication code."})
+            findings.append(_finding(
+                "PAYMENT_UPDATE_LINK_REVIEW",
+                "Changed payment instructions include a non-allowlisted URL; independently confirm bank details.",
+            ))
 
-    # Maintain consistent order, de-duplicate repeated body/HTML URL mentions.
-    unique: list[dict] = []
-    seen_finding = set()
-    for f in findings:
-        key = (f.get("code"), f.get("message"))
-        if key not in seen_finding:
-            seen_finding.add(key)
-            unique.append(f)
     return {
-        "findings": unique,
+        "findings": _dedupe(findings),
         "url_count": len(candidates),
-        "coverage": {"url_syntax_inspection": "complete", "url_reputation": "not_implemented",
-                     "redirect_verification": "not_performed_no_network_fetch"},
+        "context_penalty": round(min(4.0, float(len(candidates))), 2),
+        "coverage": {
+            "url_syntax_inspection": "complete",
+            "url_reputation": "not_implemented",
+        },
     }

@@ -35,6 +35,8 @@ def inspect_html_content(subject: str, html_content: str) -> list[dict]:
         findings.append({
             "code": "ENCODED_SUSPICIOUS_TEXT",
             "category": "SUSPICIOUS_CONTENT",
+            "severity": "HIGH",
+            "confidence": 0.6,
             "message": (
                 "Suspicious text was identified after HTML-entity decoding."
             ),
@@ -59,6 +61,8 @@ def inspect_html_content(subject: str, html_content: str) -> list[dict]:
             findings.append({
                 "code": "HIDDEN_HTML_TEXT",
                 "category": "SUSPICIOUS_CONTENT",
+                "severity": "LOW",
+                "confidence": 0.5,
                 "message": (
                     "An HTML element contains text but is marked as hidden. "
                     "Review it in context."
@@ -76,6 +80,8 @@ def inspect_html_content(subject: str, html_content: str) -> list[dict]:
         findings.append({
             "code": "ENCODED_SUSPICIOUS_TEXT",
             "category": "SUSPICIOUS_CONTENT",
+            "severity": "HIGH",
+            "confidence": 0.6,
             "message": (
                 "Suspicious text was identified after percent decoding."
             ),
@@ -97,6 +103,8 @@ def inspect_html_content(subject: str, html_content: str) -> list[dict]:
             findings.append({
                 "code": "ENCODED_SUSPICIOUS_TEXT",
                 "category": "SUSPICIOUS_CONTENT",
+                "severity": "HIGH",
+                "confidence": 0.6,
                 "message": (
                     "A Base64-like token decodes to suspicious text."
                 ),
