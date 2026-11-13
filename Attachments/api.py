@@ -1,6 +1,6 @@
 """Shared public attachment response formatter.
 
-The only mounted attachment API is defined in the consolidated all_apis.py.
+The only mounted attachment API is defined in the consolidated app.py.
 This module does not register an independent router.
 """
 from __future__ import annotations
